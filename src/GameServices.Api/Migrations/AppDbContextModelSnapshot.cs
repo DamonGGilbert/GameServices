@@ -17,6 +17,40 @@ namespace GameServices.Api.Migrations
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.12");
 
+            modelBuilder.Entity("GameServices.Api.Data.BossContribution", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("AttackDay")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Attacks")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("AttacksToday")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("BossId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("TotalDamage")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("BossId", "UserId")
+                        .IsUnique();
+
+                    b.ToTable("BossContributions");
+                });
+
             modelBuilder.Entity("GameServices.Api.Data.CardGameProfile", b =>
                 {
                     b.Property<Guid>("Id")
@@ -117,6 +151,190 @@ namespace GameServices.Api.Migrations
                         .IsUnique();
 
                     b.ToTable("Friendships");
+                });
+
+            modelBuilder.Entity("GameServices.Api.Data.Guild", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(140)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsOpen")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("NormalizedName")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Tag")
+                        .IsRequired()
+                        .HasMaxLength(4)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("NormalizedName")
+                        .IsUnique();
+
+                    b.ToTable("Guilds");
+                });
+
+            modelBuilder.Entity("GameServices.Api.Data.GuildBoss", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("BossKey")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("CurrentHp")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("EndsUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("GuildId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("MaxHp")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("RewardPool")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("StartedById")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("StartedUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GuildId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_GuildBosses_OneActivePerGuild")
+                        .HasFilter("\"Status\" = 0");
+
+                    b.HasIndex("GuildId", "StartedUtc");
+
+                    b.ToTable("GuildBosses");
+                });
+
+            modelBuilder.Entity("GameServices.Api.Data.GuildInvite", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("ExpiresUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("GuildId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("InvitedById")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("GuildId", "UserId")
+                        .IsUnique();
+
+                    b.ToTable("GuildInvites");
+                });
+
+            modelBuilder.Entity("GameServices.Api.Data.GuildMember", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("GuildId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("JoinedUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Role")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GuildId");
+
+                    b.HasIndex("UserId")
+                        .IsUnique();
+
+                    b.ToTable("GuildMembers");
+                });
+
+            modelBuilder.Entity("GameServices.Api.Data.GuildMessage", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("GuildId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("SenderId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("SentUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Text")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GuildId", "Id");
+
+                    b.HasIndex("SenderId", "SentUtc");
+
+                    b.ToTable("GuildMessages");
                 });
 
             modelBuilder.Entity("GameServices.Api.Data.LedgerEntry", b =>
@@ -321,6 +539,21 @@ namespace GameServices.Api.Migrations
                     b.ToTable("Blocks");
                 });
 
+            modelBuilder.Entity("GameServices.Api.Data.BossContribution", b =>
+                {
+                    b.HasOne("GameServices.Api.Data.GuildBoss", null)
+                        .WithMany()
+                        .HasForeignKey("BossId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("GameServices.Api.Data.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("GameServices.Api.Data.CardGameProfile", b =>
                 {
                     b.HasOne("GameServices.Api.Data.User", "User")
@@ -358,6 +591,60 @@ namespace GameServices.Api.Migrations
                     b.HasOne("GameServices.Api.Data.User", null)
                         .WithMany()
                         .HasForeignKey("UserBId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("GameServices.Api.Data.GuildBoss", b =>
+                {
+                    b.HasOne("GameServices.Api.Data.Guild", null)
+                        .WithMany()
+                        .HasForeignKey("GuildId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("GameServices.Api.Data.GuildInvite", b =>
+                {
+                    b.HasOne("GameServices.Api.Data.Guild", null)
+                        .WithMany()
+                        .HasForeignKey("GuildId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("GameServices.Api.Data.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("GameServices.Api.Data.GuildMember", b =>
+                {
+                    b.HasOne("GameServices.Api.Data.Guild", null)
+                        .WithMany()
+                        .HasForeignKey("GuildId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("GameServices.Api.Data.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("GameServices.Api.Data.GuildMessage", b =>
+                {
+                    b.HasOne("GameServices.Api.Data.Guild", null)
+                        .WithMany()
+                        .HasForeignKey("GuildId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("GameServices.Api.Data.User", null)
+                        .WithMany()
+                        .HasForeignKey("SenderId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

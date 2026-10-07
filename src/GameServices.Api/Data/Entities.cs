@@ -170,3 +170,85 @@ public class ChatMessage
     public DateTime SentUtc { get; set; } = DateTime.UtcNow;
     public DateTime? ReadUtc { get; set; }
 }
+
+public enum GuildRole { Member = 0, Officer = 1, Leader = 2 }
+
+/// <summary>A guild (clan): a group of players with a shared chat and shared boss battles.</summary>
+public class Guild
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public string Name { get; set; } = "";
+    public string NormalizedName { get; set; } = "";
+
+    /// <summary>The short 2-4 letter tag shown next to names, e.g. [DAMO].</summary>
+    public string Tag { get; set; } = "";
+
+    public string Description { get; set; } = "";
+
+    /// <summary>Open guilds can be joined by anyone. Closed ones need an invite from an officer.</summary>
+    public bool IsOpen { get; set; } = true;
+
+    public DateTime CreatedUtc { get; set; } = DateTime.UtcNow;
+}
+
+/// <summary>Membership. A player can be in at most ONE guild (the unique index on UserId enforces it).</summary>
+public class GuildMember
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid GuildId { get; set; }
+    public Guid UserId { get; set; }
+    public GuildRole Role { get; set; }
+    public DateTime JoinedUtc { get; set; } = DateTime.UtcNow;
+}
+
+public class GuildInvite
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid GuildId { get; set; }
+    public Guid UserId { get; set; }
+    public Guid InvitedById { get; set; }
+    public DateTime CreatedUtc { get; set; } = DateTime.UtcNow;
+    public DateTime ExpiresUtc { get; set; }
+}
+
+public class GuildMessage
+{
+    public long Id { get; set; }
+    public Guid GuildId { get; set; }
+    public Guid SenderId { get; set; }
+    public string Text { get; set; } = "";
+    public DateTime SentUtc { get; set; } = DateTime.UtcNow;
+}
+
+public enum BossStatus { Active = 0, Defeated = 1, Expired = 2 }
+
+/// <summary>One boss fight. Everyone in the guild attacks the same health bar.</summary>
+public class GuildBoss
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid GuildId { get; set; }
+    public string BossKey { get; set; } = "";
+    public string Name { get; set; } = "";
+    public int MaxHp { get; set; }
+    public int CurrentHp { get; set; }
+    public int RewardPool { get; set; }
+    public BossStatus Status { get; set; }
+    public Guid StartedById { get; set; }
+    public DateTime StartedUtc { get; set; } = DateTime.UtcNow;
+    public DateTime EndsUtc { get; set; }
+
+    /// <summary>Concurrency token: two members hitting the boss at the same instant can't both "win" the same HP.</summary>
+    public int Version { get; set; }
+}
+
+/// <summary>How much damage one player has dealt to one boss (the leaderboard).</summary>
+public class BossContribution
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid BossId { get; set; }
+    public Guid UserId { get; set; }
+    public int TotalDamage { get; set; }
+    public int Attacks { get; set; }
+    public int AttackDay { get; set; }
+    public int AttacksToday { get; set; }
+}

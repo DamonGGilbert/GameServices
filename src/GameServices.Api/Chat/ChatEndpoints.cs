@@ -18,9 +18,10 @@ public record ChatMessageDto(long Id, Guid FromUserId, Guid ToUserId, string Tex
 /// message goes through the same validation, whoever sends it.
 /// </summary>
 [Authorize]
-public class ChatHub : Hub
+public class ChatHub(AppDbContext db) : Hub
 {
     public static string Group(Guid userId) => "user:" + userId;
+    public static string GuildGroup(Guid guildId) => "guild:" + guildId;
 
     public override async Task OnConnectedAsync()
     {
@@ -28,6 +29,14 @@ public class ChatHub : Hub
         if (SocialEndpoints.TryGetUserId(Context.User!, out Guid me))
         {
             await Groups.AddToGroupAsync(Context.ConnectionId, Group(me));
+
+            // ...and the room of their guild, if they are in one.
+            Guid? guildId = await db.GuildMembers.AsNoTracking().Where(m => m.UserId == me).Select(m => (Guid?)m.GuildId).FirstOrDefaultAsync();
+
+            if (guildId != null)
+            {
+                await Groups.AddToGroupAsync(Context.ConnectionId, GuildGroup(guildId.Value));
+            }
         }
 
         await base.OnConnectedAsync();

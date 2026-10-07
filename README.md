@@ -69,5 +69,5 @@ tests/GameServices.Tests/         integration tests (real server, throw-away dat
 - [x] **Phase 2a** - cloud saves (per user, per game) with optimistic concurrency; EF Core migrations
 - [x] **Phase 2b** - server-authoritative economy: card catalog, wallet, server-side pack opening, capped duel rewards, ledger
 - [x] **Phase 3 (server)** - friends, blocking, direct chat (REST + SignalR live push), presence
-- [ ] **Phase 4** - guilds, roles, guild chat, group boss battles with scheduled background jobs
+- [x] **Phase 4 (server)** - guilds, roles, invites, guild chat, group boss battles with a scheduled background job
 - [ ] **Phase 5** - PostgreSQL + EF migrations, Docker, CI, deployment, logging and health checks

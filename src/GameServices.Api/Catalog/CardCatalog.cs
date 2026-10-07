@@ -2,7 +2,7 @@ using System.Text.Json;
 
 namespace GameServices.Api.Catalog;
 
-public record CatalogCard(string Id, string Name, string Rarity, int Category);
+public record CatalogCard(string Id, string Name, string Rarity, int Category, int Atk = 0);
 
 public record StarterEntry(string Id, int Qty);
 
@@ -36,6 +36,8 @@ public class CardCatalog
     }
 
     public bool Exists(string cardId) => byId.ContainsKey(cardId);
+
+    public CatalogCard? Find(string cardId) => byId.GetValueOrDefault(cardId);
 
     public static CardCatalog LoadFile(string path)
     {

@@ -75,7 +75,7 @@ public static class EconomyEndpoints
     }
 
     /// <summary>First visit: create the wallet and hand over the starter deck (written in the ledger).</summary>
-    private static async Task<CardGameProfile> GetOrCreateProfile(AppDbContext db, CardCatalog catalog, Guid userId, CancellationToken cancel)
+    public static async Task<CardGameProfile> GetOrCreateProfile(AppDbContext db, CardCatalog catalog, Guid userId, CancellationToken cancel)
     {
         CardGameProfile? profile = await db.CardGameProfiles.FirstOrDefaultAsync(p => p.UserId == userId, cancel);
 
