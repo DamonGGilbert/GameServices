@@ -1,0 +1,54 @@
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
+
+namespace GameServices.Api.Data;
+
+/// <summary>
+/// Entity Framework Core's view of the database: each DbSet is a table.
+/// EF Core turns C# objects into rows and LINQ queries into SQL, so we never
+/// build SQL strings by hand (which also prevents SQL injection).
+/// </summary>
+public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
+{
+    public DbSet<User> Users => Set<User>();
+    public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
+
+    // SQLite doesn't remember that a date is UTC, so we put the "UTC" label back
+    // whenever we read one. Otherwise clients would see dates without the trailing Z.
+    protected override void ConfigureConventions(ModelConfigurationBuilder configuration)
+    {
+        configuration.Properties<DateTime>().HaveConversion<UtcConverter>();
+        configuration.Properties<DateTime?>().HaveConversion<NullableUtcConverter>();
+    }
+
+    private class UtcConverter() : ValueConverter<DateTime, DateTime>(
+        v => v, v => DateTime.SpecifyKind(v, DateTimeKind.Utc));
+
+    private class NullableUtcConverter() : ValueConverter<DateTime?, DateTime?>(
+        v => v, v => v.HasValue ? DateTime.SpecifyKind(v.Value, DateTimeKind.Utc) : v);
+
+    protected override void OnModelCreating(ModelBuilder model)
+    {
+        model.Entity<User>(user =>
+        {
+            user.HasKey(u => u.Id);
+            user.Property(u => u.Username).HasMaxLength(20).IsRequired();
+            user.Property(u => u.NormalizedUsername).HasMaxLength(20).IsRequired();
+            user.Property(u => u.Email).HasMaxLength(254);
+            user.Property(u => u.NormalizedEmail).HasMaxLength(254);
+
+            // The database itself guarantees no duplicate usernames, even if two
+            // sign-ups arrive at the same instant (a "race condition").
+            user.HasIndex(u => u.NormalizedUsername).IsUnique();
+            user.HasIndex(u => u.NormalizedEmail).IsUnique();
+        });
+
+        model.Entity<RefreshToken>(token =>
+        {
+            token.HasKey(t => t.Id);
+            token.Property(t => t.TokenHash).HasMaxLength(64).IsRequired();
+            token.HasIndex(t => t.TokenHash).IsUnique();
+            token.HasOne(t => t.User).WithMany(u => u.RefreshTokens).HasForeignKey(t => t.UserId).OnDelete(DeleteBehavior.Cascade);
+        });
+    }
+}
