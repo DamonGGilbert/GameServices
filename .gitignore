@@ -8,3 +8,5 @@ obj/
 *.user
 appsettings.Production.json
 secrets.json
+
+.env

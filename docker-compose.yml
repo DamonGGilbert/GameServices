@@ -1,0 +1,50 @@
+# ---------------------------------------------------------------------------
+# docker-compose describes a WHOLE system as one file: here, the PostgreSQL
+# database and your game server, wired together. Start everything with:
+#
+#     docker compose up --build        (stop it with Ctrl+C, or `docker compose down`)
+#
+# Secrets (the database password and the token-signing key) are NOT in this
+# file. They come from a file called .env that you create with
+# scripts/make-env.ps1 and never commit to git.
+# ---------------------------------------------------------------------------
+
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: gameservices
+      POSTGRES_USER: gameservices
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Run scripts/make-env.ps1 first to create the .env file}
+    volumes:
+      # A "volume" keeps the database files OUTSIDE the container, so your data survives
+      # restarts and rebuilds. (docker compose down -v would delete it.)
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      # The API must not start until the database says it is ready for connections.
+      test: ["CMD-SHELL", "pg_isready -U gameservices -d gameservices"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    # No "ports:" on purpose. Only the API (on the private compose network) can reach the
+    # database. Nothing on your home network, or the internet, can talk to it directly.
+
+  api:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      Database__Provider: Postgres
+      # "db" is the name of the database service above: compose gives each service a DNS name.
+      ConnectionStrings__Default: Host=db;Port=5432;Database=gameservices;Username=gameservices;Password=${POSTGRES_PASSWORD}
+      Jwt__Key: ${JWT_KEY:?Run scripts/make-env.ps1 first to create the .env file}
+    ports:
+      # your PC's port 5080 -> the container's port 8080 (so the game still uses :5080)
+      - "5080:8080"
+
+volumes:
+  pgdata:

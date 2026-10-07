@@ -18,8 +18,20 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddGameServices(this IServiceCollection services, IConfiguration configuration)
     {
         // ---- Database ----
+        // Database:Provider picks the engine. "Sqlite" (default) is a single file, perfect on your own PC.
+        // "Postgres" is the real database server used in Docker and when the game is hosted online.
+        string provider = configuration["Database:Provider"] ?? "Sqlite";
         string connection = configuration.GetConnectionString("Default") ?? "Data Source=gameservices.db";
-        services.AddDbContext<AppDbContext>(options => options.UseSqlite(connection));
+
+        if (provider.Equals("Postgres", StringComparison.OrdinalIgnoreCase))
+        {
+            // The rest of the code only knows "AppDbContext"; here we hand it the PostgreSQL flavour.
+            services.AddDbContext<AppDbContext, PostgresAppDbContext>(options => options.UseNpgsql(connection));
+        }
+        else
+        {
+            services.AddDbContext<AppDbContext>(options => options.UseSqlite(connection));
+        }
 
         // ---- Passwords: salted, slow, adjustable hashing (PBKDF2 via ASP.NET Core Identity) ----
         services.AddSingleton<IPasswordHasher<User>, PasswordHasher<User>>();

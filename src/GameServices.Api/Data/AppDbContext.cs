@@ -8,8 +8,17 @@ namespace GameServices.Api.Data;
 /// EF Core turns C# objects into rows and LINQ queries into SQL, so we never
 /// build SQL strings by hand (which also prevents SQL injection).
 /// </summary>
-public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
+public class AppDbContext : DbContext
 {
+    public AppDbContext(DbContextOptions<AppDbContext> options) : base(options)
+    {
+    }
+
+    // Used by the PostgreSQL version below.
+    protected AppDbContext(DbContextOptions options) : base(options)
+    {
+    }
+
     public DbSet<User> Users => Set<User>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
     public DbSet<PlayerSave> PlayerSaves => Set<PlayerSave>();

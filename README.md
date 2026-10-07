@@ -70,4 +70,24 @@ tests/GameServices.Tests/         integration tests (real server, throw-away dat
 - [x] **Phase 2b** - server-authoritative economy: card catalog, wallet, server-side pack opening, capped duel rewards, ledger
 - [x] **Phase 3 (server)** - friends, blocking, direct chat (REST + SignalR live push), presence
 - [x] **Phase 4 (server)** - guilds, roles, invites, guild chat, group boss battles with a scheduled background job
-- [ ] **Phase 5** - PostgreSQL + EF migrations, Docker, CI, deployment, logging and health checks
+- [~] **Phase 5 (in progress)** - PostgreSQL + EF migrations, Docker, CI, deployment, logging and health checks
+
+
+## Running with Docker + PostgreSQL (Phase 5)
+
+One-time setup (needs Docker Desktop running):
+
+```
+powershell -ExecutionPolicy Bypass -File scripts\make-env.ps1     # creates .env with random secrets
+docker compose up --build                                        # database + server
+```
+
+The game server is then on `http://localhost:5080` (same address as `dotnet run`, so stop that first).
+`Database:Provider` selects the engine: `Sqlite` (default, `dotnet run`) or `Postgres` (Docker).
+Each engine has its own migrations folder (`Migrations/` and `MigrationsPostgres/`).
+
+Run the tests against PostgreSQL instead of SQLite:
+
+```
+$env:TEST_DATABASE = "postgres"; dotnet test
+```
