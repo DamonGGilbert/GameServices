@@ -17,4 +17,8 @@
     <PackageReference Include="Scalar.AspNetCore" Version="2.17.14" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Content Update="Catalog\catalog.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

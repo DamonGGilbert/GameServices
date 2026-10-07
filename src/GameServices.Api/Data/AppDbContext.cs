@@ -13,6 +13,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<User> Users => Set<User>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
     public DbSet<PlayerSave> PlayerSaves => Set<PlayerSave>();
+    public DbSet<CardGameProfile> CardGameProfiles => Set<CardGameProfile>();
+    public DbSet<OwnedCard> OwnedCards => Set<OwnedCard>();
+    public DbSet<LedgerEntry> Ledger => Set<LedgerEntry>();
 
     // SQLite doesn't remember that a date is UTC, so we put the "UTC" label back
     // whenever we read one. Otherwise clients would see dates without the trailing Z.
@@ -57,6 +60,31 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             save.Property(s => s.Version).IsConcurrencyToken();
 
             save.HasOne(s => s.User).WithMany().HasForeignKey(s => s.UserId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        model.Entity<CardGameProfile>(profile =>
+        {
+            profile.HasKey(p => p.Id);
+            profile.HasIndex(p => p.UserId).IsUnique();
+            profile.Property(p => p.Version).IsConcurrencyToken();
+            profile.HasOne(p => p.User).WithMany().HasForeignKey(p => p.UserId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        model.Entity<OwnedCard>(card =>
+        {
+            card.HasKey(c => c.Id);
+            card.Property(c => c.CardId).HasMaxLength(20).IsRequired();
+            card.HasIndex(c => new { c.UserId, c.CardId }).IsUnique();
+            card.HasOne<User>().WithMany().HasForeignKey(c => c.UserId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        model.Entity<LedgerEntry>(entry =>
+        {
+            entry.HasKey(e => e.Id);
+            entry.Property(e => e.Kind).HasMaxLength(30).IsRequired();
+            entry.Property(e => e.Detail).HasMaxLength(200);
+            entry.HasIndex(e => new { e.UserId, e.CreatedUtc });
+            entry.HasOne<User>().WithMany().HasForeignKey(e => e.UserId).OnDelete(DeleteBehavior.Cascade);
         });
 
         model.Entity<RefreshToken>(token =>
