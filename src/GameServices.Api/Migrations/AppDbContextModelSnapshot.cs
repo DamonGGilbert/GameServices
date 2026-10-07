@@ -53,6 +53,72 @@ namespace GameServices.Api.Migrations
                     b.ToTable("CardGameProfiles");
                 });
 
+            modelBuilder.Entity("GameServices.Api.Data.ChatMessage", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime?>("ReadUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("RecipientId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("SenderId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("SentUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Text")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SenderId", "SentUtc");
+
+                    b.HasIndex("RecipientId", "SenderId", "Id");
+
+                    b.ToTable("ChatMessages");
+                });
+
+            modelBuilder.Entity("GameServices.Api.Data.Friendship", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("AcceptedUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("RequesterId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("UserAId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("UserBId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserBId");
+
+                    b.HasIndex("UserAId", "UserBId")
+                        .IsUnique();
+
+                    b.ToTable("Friendships");
+                });
+
             modelBuilder.Entity("GameServices.Api.Data.LedgerEntry", b =>
                 {
                     b.Property<Guid>("Id")
@@ -198,6 +264,9 @@ namespace GameServices.Api.Migrations
                     b.Property<DateTime?>("LastLoginUtc")
                         .HasColumnType("TEXT");
 
+                    b.Property<DateTime?>("LastSeenUtc")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("NormalizedEmail")
                         .HasMaxLength(254)
                         .HasColumnType("TEXT");
@@ -227,6 +296,31 @@ namespace GameServices.Api.Migrations
                     b.ToTable("Users");
                 });
 
+            modelBuilder.Entity("GameServices.Api.Data.UserBlock", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("BlockedId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("BlockerId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedUtc")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BlockedId");
+
+                    b.HasIndex("BlockerId", "BlockedId")
+                        .IsUnique();
+
+                    b.ToTable("Blocks");
+                });
+
             modelBuilder.Entity("GameServices.Api.Data.CardGameProfile", b =>
                 {
                     b.HasOne("GameServices.Api.Data.User", "User")
@@ -236,6 +330,36 @@ namespace GameServices.Api.Migrations
                         .IsRequired();
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("GameServices.Api.Data.ChatMessage", b =>
+                {
+                    b.HasOne("GameServices.Api.Data.User", null)
+                        .WithMany()
+                        .HasForeignKey("RecipientId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("GameServices.Api.Data.User", null)
+                        .WithMany()
+                        .HasForeignKey("SenderId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("GameServices.Api.Data.Friendship", b =>
+                {
+                    b.HasOne("GameServices.Api.Data.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserAId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("GameServices.Api.Data.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserBId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("GameServices.Api.Data.LedgerEntry", b =>
@@ -276,6 +400,21 @@ namespace GameServices.Api.Migrations
                         .IsRequired();
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("GameServices.Api.Data.UserBlock", b =>
+                {
+                    b.HasOne("GameServices.Api.Data.User", null)
+                        .WithMany()
+                        .HasForeignKey("BlockedId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("GameServices.Api.Data.User", null)
+                        .WithMany()
+                        .HasForeignKey("BlockerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("GameServices.Api.Data.User", b =>

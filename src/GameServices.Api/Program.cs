@@ -1,5 +1,7 @@
 using GameServices.Api.Auth;
 using GameServices.Api.Catalog;
+using GameServices.Api.Chat;
+using GameServices.Api.Social;
 using GameServices.Api.Economy;
 using GameServices.Api.Data;
 using GameServices.Api.Infrastructure;
@@ -10,6 +12,7 @@ using Scalar.AspNetCore;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddGameServices(builder.Configuration);
+builder.Services.AddSignalR();
 
 // The list of cards that exist (exported from Unity). Loaded once at startup.
 string catalogPath = builder.Configuration["Catalog:Path"] ?? Path.Combine(builder.Environment.ContentRootPath, "Catalog", "catalog.json");
@@ -45,6 +48,9 @@ app.MapGet("/health", () => Results.Ok(new { status = "healthy", timeUtc = DateT
 app.MapAuthEndpoints();
 app.MapSaveEndpoints();
 app.MapEconomyEndpoints();
+app.MapSocialEndpoints();
+app.MapChatEndpoints();
+app.MapHub<ChatHub>("/hubs/chat");
 
 app.Run();
 

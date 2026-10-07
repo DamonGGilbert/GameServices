@@ -27,6 +27,9 @@ public class User
     public DateTime CreatedUtc { get; set; } = DateTime.UtcNow;
     public DateTime? LastLoginUtc { get; set; }
 
+    /// <summary>Updated whenever the player's game talks to the social features. Used for the online dot.</summary>
+    public DateTime? LastSeenUtc { get; set; }
+
     public List<RefreshToken> RefreshTokens { get; set; } = new();
 }
 
@@ -122,4 +125,48 @@ public class LedgerEntry
     public int Amount { get; set; }
     public int BalanceAfter { get; set; }
     public DateTime CreatedUtc { get; set; } = DateTime.UtcNow;
+}
+
+public enum FriendshipStatus { Pending = 0, Accepted = 1 }
+
+/// <summary>
+/// One row per PAIR of players. UserAId/UserBId are the two ids in sorted order, so "A and B" and
+/// "B and A" are the same pair and the database's unique index can forbid duplicates, even if both
+/// players send each other a request at the same instant.
+/// </summary>
+public class Friendship
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid UserAId { get; set; }
+    public Guid UserBId { get; set; }
+
+    /// <summary>Who sent the request (always A or B).</summary>
+    public Guid RequesterId { get; set; }
+
+    public FriendshipStatus Status { get; set; }
+    public DateTime CreatedUtc { get; set; } = DateTime.UtcNow;
+    public DateTime? AcceptedUtc { get; set; }
+
+    public Guid OtherThan(Guid me) => UserAId == me ? UserBId : UserAId;
+}
+
+/// <summary>"Blocker does not want to hear from Blocked." Blocking is one-way, but works both ways in effect.</summary>
+public class UserBlock
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid BlockerId { get; set; }
+    public Guid BlockedId { get; set; }
+    public DateTime CreatedUtc { get; set; } = DateTime.UtcNow;
+}
+
+/// <summary>One direct message between two friends.</summary>
+public class ChatMessage
+{
+    /// <summary>Counts up (1, 2, 3...). Clients ask for "everything after id N", which is easy and cheap.</summary>
+    public long Id { get; set; }
+    public Guid SenderId { get; set; }
+    public Guid RecipientId { get; set; }
+    public string Text { get; set; } = "";
+    public DateTime SentUtc { get; set; } = DateTime.UtcNow;
+    public DateTime? ReadUtc { get; set; }
 }

@@ -38,6 +38,23 @@ public static class ServiceCollectionExtensions
                 // ASP.NET renames "sub" to a long Microsoft URL, which would hide the user id.
                 options.MapInboundClaims = false;
 
+                // Browsers and game WebSockets can't set an Authorization header, so for the chat
+                // hub the access token travels in the URL (?access_token=...) instead.
+                options.Events = new JwtBearerEvents
+                {
+                    OnMessageReceived = context =>
+                    {
+                        string? token = context.Request.Query["access_token"];
+
+                        if (!string.IsNullOrEmpty(token) && context.HttpContext.Request.Path.StartsWithSegments("/hubs"))
+                        {
+                            context.Token = token;
+                        }
+
+                        return Task.CompletedTask;
+                    }
+                };
+
                 options.TokenValidationParameters = new TokenValidationParameters
                 {
                     ValidateIssuer = true,

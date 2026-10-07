@@ -16,6 +16,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<CardGameProfile> CardGameProfiles => Set<CardGameProfile>();
     public DbSet<OwnedCard> OwnedCards => Set<OwnedCard>();
     public DbSet<LedgerEntry> Ledger => Set<LedgerEntry>();
+    public DbSet<Friendship> Friendships => Set<Friendship>();
+    public DbSet<UserBlock> Blocks => Set<UserBlock>();
+    public DbSet<ChatMessage> ChatMessages => Set<ChatMessage>();
 
     // SQLite doesn't remember that a date is UTC, so we put the "UTC" label back
     // whenever we read one. Otherwise clients would see dates without the trailing Z.
@@ -85,6 +88,34 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entry.Property(e => e.Detail).HasMaxLength(200);
             entry.HasIndex(e => new { e.UserId, e.CreatedUtc });
             entry.HasOne<User>().WithMany().HasForeignKey(e => e.UserId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        model.Entity<Friendship>(f =>
+        {
+            f.HasKey(x => x.Id);
+            f.HasIndex(x => new { x.UserAId, x.UserBId }).IsUnique();
+            f.HasIndex(x => x.UserBId);
+            f.HasOne<User>().WithMany().HasForeignKey(x => x.UserAId).OnDelete(DeleteBehavior.Cascade);
+            f.HasOne<User>().WithMany().HasForeignKey(x => x.UserBId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        model.Entity<UserBlock>(b =>
+        {
+            b.HasKey(x => x.Id);
+            b.HasIndex(x => new { x.BlockerId, x.BlockedId }).IsUnique();
+            b.HasIndex(x => x.BlockedId);
+            b.HasOne<User>().WithMany().HasForeignKey(x => x.BlockerId).OnDelete(DeleteBehavior.Cascade);
+            b.HasOne<User>().WithMany().HasForeignKey(x => x.BlockedId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        model.Entity<ChatMessage>(m =>
+        {
+            m.HasKey(x => x.Id);
+            m.Property(x => x.Text).HasMaxLength(500).IsRequired();
+            m.HasIndex(x => new { x.RecipientId, x.SenderId, x.Id });
+            m.HasIndex(x => new { x.SenderId, x.SentUtc });
+            m.HasOne<User>().WithMany().HasForeignKey(x => x.SenderId).OnDelete(DeleteBehavior.Cascade);
+            m.HasOne<User>().WithMany().HasForeignKey(x => x.RecipientId).OnDelete(DeleteBehavior.Cascade);
         });
 
         model.Entity<RefreshToken>(token =>
