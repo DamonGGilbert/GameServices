@@ -1,6 +1,7 @@
 using GameServices.Api.Auth;
 using GameServices.Api.Data;
 using GameServices.Api.Infrastructure;
+using GameServices.Api.Saves;
 using Microsoft.EntityFrameworkCore;
 using Scalar.AspNetCore;
 
@@ -10,11 +11,12 @@ builder.Services.AddGameServices(builder.Configuration);
 
 var app = builder.Build();
 
-// Create the database file/tables if they don't exist yet.
-// (Later we'll switch to proper EF Core "migrations" when we move to PostgreSQL.)
+// Bring the database up to date. A "migration" is a small, versioned script that changes the
+// database structure (add a table, add a column). EF Core remembers which ones have run, so
+// every machine - your PC, a test, the production server - ends up with the same structure.
 using (var scope = app.Services.CreateScope())
 {
-    scope.ServiceProvider.GetRequiredService<AppDbContext>().Database.EnsureCreated();
+    scope.ServiceProvider.GetRequiredService<AppDbContext>().Database.Migrate();
 }
 
 // ---- The request pipeline: every request passes through these, in order ----
@@ -35,6 +37,7 @@ app.MapGet("/health", () => Results.Ok(new { status = "healthy", timeUtc = DateT
     .WithTags("Operations");
 
 app.MapAuthEndpoints();
+app.MapSaveEndpoints();
 
 app.Run();
 

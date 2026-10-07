@@ -12,6 +12,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 {
     public DbSet<User> Users => Set<User>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
+    public DbSet<PlayerSave> PlayerSaves => Set<PlayerSave>();
 
     // SQLite doesn't remember that a date is UTC, so we put the "UTC" label back
     // whenever we read one. Otherwise clients would see dates without the trailing Z.
@@ -41,6 +42,21 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             // sign-ups arrive at the same instant (a "race condition").
             user.HasIndex(u => u.NormalizedUsername).IsUnique();
             user.HasIndex(u => u.NormalizedEmail).IsUnique();
+        });
+
+        model.Entity<PlayerSave>(save =>
+        {
+            save.HasKey(s => s.Id);
+            save.Property(s => s.GameId).HasMaxLength(40).IsRequired();
+            save.Property(s => s.Json).IsRequired();
+
+            // One save per player per game. Also stops two simultaneous first-saves.
+            save.HasIndex(s => new { s.UserId, s.GameId }).IsUnique();
+
+            // If two requests try to update the same version at once, only one wins.
+            save.Property(s => s.Version).IsConcurrencyToken();
+
+            save.HasOne(s => s.User).WithMany().HasForeignKey(s => s.UserId).OnDelete(DeleteBehavior.Cascade);
         });
 
         model.Entity<RefreshToken>(token =>

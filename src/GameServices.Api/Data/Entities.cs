@@ -51,3 +51,24 @@ public class RefreshToken
 
     public bool IsActive => RevokedUtc == null && ExpiresUtc > DateTime.UtcNow;
 }
+
+/// <summary>
+/// One player's cloud save for one game. The save itself is an opaque JSON document
+/// (each game decides what is in it); the server only adds ownership and versioning.
+/// </summary>
+public class PlayerSave
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid UserId { get; set; }
+    public User User { get; set; } = null!;
+
+    /// <summary>Which game this save belongs to, e.g. "yugioh-card-game" or "walking-game".</summary>
+    public string GameId { get; set; } = "";
+
+    public string Json { get; set; } = "";
+
+    /// <summary>Goes up by one on every save. Used to detect "someone else saved first".</summary>
+    public int Version { get; set; }
+
+    public DateTime UpdatedUtc { get; set; } = DateTime.UtcNow;
+}
