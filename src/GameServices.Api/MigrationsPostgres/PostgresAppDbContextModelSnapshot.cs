@@ -406,6 +406,39 @@ namespace GameServices.Api.MigrationsPostgres
                     b.ToTable("OwnedCards");
                 });
 
+            modelBuilder.Entity("GameServices.Api.Data.PasswordResetCode", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("CodeHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTime>("CreatedUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("ExpiresUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("UsedUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "CreatedUtc");
+
+                    b.ToTable("PasswordResetCodes");
+                });
+
             modelBuilder.Entity("GameServices.Api.Data.PlayerSave", b =>
                 {
                     b.Property<Guid>("Id")
@@ -668,6 +701,15 @@ namespace GameServices.Api.MigrationsPostgres
                 });
 
             modelBuilder.Entity("GameServices.Api.Data.OwnedCard", b =>
+                {
+                    b.HasOne("GameServices.Api.Data.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("GameServices.Api.Data.PasswordResetCode", b =>
                 {
                     b.HasOne("GameServices.Api.Data.User", null)
                         .WithMany()

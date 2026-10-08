@@ -30,6 +30,12 @@ using (var scope = app.Services.CreateScope())
     scope.ServiceProvider.GetRequiredService<AppDbContext>().Database.Migrate();
 }
 
+// Admin commands (run on the server machine): dotnet run -- reset-password SomeUser
+if (await AdminCommands.TryRun(app.Services, args))
+{
+    return;
+}
+
 // ---- The request pipeline: every request passes through these, in order ----
 app.UseExceptionHandler();      // turn unexpected crashes into a clean 500 instead of leaking details
 app.UseStatusCodePages();

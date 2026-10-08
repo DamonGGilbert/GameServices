@@ -36,6 +36,18 @@ public static class ServiceCollectionExtensions
         // ---- Passwords: salted, slow, adjustable hashing (PBKDF2 via ASP.NET Core Identity) ----
         services.AddSingleton<IPasswordHasher<User>, PasswordHasher<User>>();
 
+        // ---- Email: a real mail server if one is configured, otherwise the server window ----
+        services.Configure<GameServices.Api.Email.EmailOptions>(configuration.GetSection(GameServices.Api.Email.EmailOptions.SectionName));
+
+        if (!string.IsNullOrWhiteSpace(configuration[GameServices.Api.Email.EmailOptions.SectionName + ":Host"]))
+        {
+            services.AddSingleton<GameServices.Api.Email.IEmailSender, GameServices.Api.Email.SmtpEmailSender>();
+        }
+        else
+        {
+            services.AddSingleton<GameServices.Api.Email.IEmailSender, GameServices.Api.Email.LogEmailSender>();
+        }
+
         // ---- Tokens ----
         JwtOptions jwt = configuration.GetSection(JwtOptions.SectionName).Get<JwtOptions>() ?? new JwtOptions();
 

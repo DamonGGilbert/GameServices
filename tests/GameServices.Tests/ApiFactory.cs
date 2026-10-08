@@ -1,5 +1,8 @@
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using GameServices.Api.Email;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Npgsql;
 using Testcontainers.PostgreSql;
 
@@ -30,6 +33,14 @@ public class ApiFactory : WebApplicationFactory<Program>
         // Tests make lots of requests quickly -- don't let the rate limiter interfere
         // (it has its own dedicated test below).
         builder.UseSetting("RateLimit:AuthRequestsPerMinute", "1000");
+
+        // Emails go to an in-memory outbox that the tests can read.
+        builder.ConfigureServices(services =>
+        {
+            services.RemoveAll<IEmailSender>();
+            services.AddSingleton<CapturingEmailSender>();
+            services.AddSingleton<IEmailSender>(provider => provider.GetRequiredService<CapturingEmailSender>());
+        });
 
         if (UsePostgres)
         {

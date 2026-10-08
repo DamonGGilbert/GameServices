@@ -34,6 +34,7 @@ public class AppDbContext : DbContext
     public DbSet<GuildMessage> GuildMessages => Set<GuildMessage>();
     public DbSet<GuildBoss> GuildBosses => Set<GuildBoss>();
     public DbSet<BossContribution> BossContributions => Set<BossContribution>();
+    public DbSet<PasswordResetCode> PasswordResetCodes => Set<PasswordResetCode>();
 
     // SQLite doesn't remember that a date is UTC, so we put the "UTC" label back
     // whenever we read one. Otherwise clients would see dates without the trailing Z.
@@ -191,6 +192,14 @@ public class AppDbContext : DbContext
             c.HasKey(x => x.Id);
             c.HasIndex(x => new { x.BossId, x.UserId }).IsUnique();
             c.HasOne<GuildBoss>().WithMany().HasForeignKey(x => x.BossId).OnDelete(DeleteBehavior.Cascade);
+            c.HasOne<User>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        model.Entity<PasswordResetCode>(c =>
+        {
+            c.HasKey(x => x.Id);
+            c.Property(x => x.CodeHash).HasMaxLength(64).IsRequired();
+            c.HasIndex(x => new { x.UserId, x.CreatedUtc });
             c.HasOne<User>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
         });
 

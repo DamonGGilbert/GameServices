@@ -397,6 +397,39 @@ namespace GameServices.Api.Migrations
                     b.ToTable("OwnedCards");
                 });
 
+            modelBuilder.Entity("GameServices.Api.Data.PasswordResetCode", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("CodeHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("ExpiresUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("UsedUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "CreatedUtc");
+
+                    b.ToTable("PasswordResetCodes");
+                });
+
             modelBuilder.Entity("GameServices.Api.Data.PlayerSave", b =>
                 {
                     b.Property<Guid>("Id")
@@ -659,6 +692,15 @@ namespace GameServices.Api.Migrations
                 });
 
             modelBuilder.Entity("GameServices.Api.Data.OwnedCard", b =>
+                {
+                    b.HasOne("GameServices.Api.Data.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("GameServices.Api.Data.PasswordResetCode", b =>
                 {
                     b.HasOne("GameServices.Api.Data.User", null)
                         .WithMany()

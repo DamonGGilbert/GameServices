@@ -30,6 +30,7 @@ public static partial class AuthEndpoints
         auth.MapPost("/login", Login);
         auth.MapPost("/refresh", Refresh);
         auth.MapPost("/logout", Logout);
+        auth.MapPasswordReset();
 
         app.MapGet("/api/me", Me).WithTags("Account").RequireAuthorization();
 

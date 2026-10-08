@@ -252,3 +252,18 @@ public class BossContribution
     public int AttackDay { get; set; }
     public int AttacksToday { get; set; }
 }
+
+/// <summary>
+/// A "forgot password" code that was emailed to a player. Only a hash is stored. It expires, works
+/// once, and is cancelled after too many wrong guesses.
+/// </summary>
+public class PasswordResetCode
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid UserId { get; set; }
+    public string CodeHash { get; set; } = "";
+    public DateTime CreatedUtc { get; set; } = DateTime.UtcNow;
+    public DateTime ExpiresUtc { get; set; }
+    public int Attempts { get; set; }
+    public DateTime? UsedUtc { get; set; }
+}
