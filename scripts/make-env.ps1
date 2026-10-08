@@ -12,7 +12,9 @@ if (Test-Path $envFile) {
 function New-Secret([int]$bytes) {
     # Cryptographically secure random bytes, made URL-safe.
     $data = New-Object byte[] $bytes
-    [System.Security.Cryptography.RandomNumberGenerator]::Fill($data)
+    $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+    $rng.GetBytes($data)
+    $rng.Dispose()
     return ([Convert]::ToBase64String($data)).TrimEnd('=').Replace('+', '-').Replace('/', '_')
 }
 
