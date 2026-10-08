@@ -38,9 +38,22 @@ public static class ServiceCollectionExtensions
 
         // ---- Tokens ----
         JwtOptions jwt = configuration.GetSection(JwtOptions.SectionName).Get<JwtOptions>() ?? new JwtOptions();
+
+        // Development only: no signing key is stored in the code (this repository is public).
+        // If none is configured, make a random one for this run. Players just refresh their
+        // sign-in after a restart. Production MUST provide Jwt__Key, or the server refuses to start.
+        if (string.IsNullOrWhiteSpace(jwt.Key) && string.Equals(configuration["ASPNETCORE_ENVIRONMENT"], "Development", StringComparison.OrdinalIgnoreCase))
+        {
+            jwt.Key = Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(48));
+        }
+
         jwt.Validate();
 
-        services.Configure<JwtOptions>(configuration.GetSection(JwtOptions.SectionName));
+        services.Configure<JwtOptions>(options =>
+        {
+            configuration.GetSection(JwtOptions.SectionName).Bind(options);
+            options.Key = jwt.Key;
+        });
         services.AddScoped<TokenService>();
 
         services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
