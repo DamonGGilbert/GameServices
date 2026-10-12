@@ -543,6 +543,22 @@ namespace GameServices.Api.MigrationsPostgres
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<int>("ShowEmblem")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("ShowFrame")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("ShowLevel")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("ShowPrestige")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ShowTitle")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.Property<string>("Username")
                         .IsRequired()
                         .HasMaxLength(20)

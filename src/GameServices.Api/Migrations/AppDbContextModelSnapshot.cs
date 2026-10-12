@@ -534,6 +534,22 @@ namespace GameServices.Api.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<int>("ShowEmblem")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("ShowFrame")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("ShowLevel")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("ShowPrestige")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ShowTitle")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Username")
                         .IsRequired()
                         .HasMaxLength(20)

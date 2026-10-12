@@ -14,7 +14,7 @@ public record CreateGuildRequest(string Name, string Tag, string? Description, b
 
 public record GuildSummary(Guid Id, string Name, string Tag, string Description, bool IsOpen, int Members);
 
-public record MemberDto(Guid UserId, string Username, string Role, bool IsOnline, int Slot);
+public record MemberDto(Guid UserId, string Username, string Role, bool IsOnline, int Slot, ShowcaseDto Showcase);
 
 public record LineupRequest(Guid UserId, int Slot);
 
@@ -195,11 +195,11 @@ public static partial class GuildEndpoints
         var rows = await (from m in db.GuildMembers.AsNoTracking()
                           join u in db.Users.AsNoTracking() on m.UserId equals u.Id
                           where m.GuildId == guild.Id
-                          select new { m.Role, m.UserId, m.Slot, u.Username, u.LastSeenUtc }).ToListAsync(cancel);
+                          select new { m.Role, m.UserId, m.Slot, u.Username, u.LastSeenUtc, u.ShowLevel, u.ShowPrestige, u.ShowEmblem, u.ShowFrame, u.ShowTitle }).ToListAsync(cancel);
 
         List<MemberDto> members = rows
             .OrderByDescending(x => x.Role).ThenBy(x => x.Username)
-            .Select(x => new MemberDto(x.UserId, x.Username, x.Role.ToString(), x.LastSeenUtc != null && now - x.LastSeenUtc.Value < SocialEndpoints.OnlineWindow, x.Slot))
+            .Select(x => new MemberDto(x.UserId, x.Username, x.Role.ToString(), x.LastSeenUtc != null && now - x.LastSeenUtc.Value < SocialEndpoints.OnlineWindow, x.Slot, new ShowcaseDto(x.ShowLevel, x.ShowPrestige, x.ShowEmblem, x.ShowFrame, x.ShowTitle)))
             .ToList();
 
         BossInfo? boss = await BuildBossInfo(db, guild.Id, me, cancel);

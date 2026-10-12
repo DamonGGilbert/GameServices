@@ -59,6 +59,7 @@ app.MapEconomyEndpoints();
 app.MapSocialEndpoints();
 app.MapChatEndpoints();
 app.MapGuildEndpoints();
+app.MapShowcaseEndpoints();
 app.MapHub<ChatHub>("/hubs/chat");
 
 app.Run();

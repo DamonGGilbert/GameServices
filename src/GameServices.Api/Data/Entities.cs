@@ -30,6 +30,14 @@ public class User
     /// <summary>Updated whenever the player's game talks to the social features. Used for the online dot.</summary>
     public DateTime? LastSeenUtc { get; set; }
 
+    // The player's "showcase": what friends and guildmates see next to their name.
+    // The game reports these (they are cosmetic), and the server checks they are in a sane range.
+    public int ShowLevel { get; set; } = 1;
+    public int ShowPrestige { get; set; }
+    public int ShowEmblem { get; set; }
+    public int ShowFrame { get; set; }
+    public string ShowTitle { get; set; } = "";
+
     public List<RefreshToken> RefreshTokens { get; set; } = new();
 }
 

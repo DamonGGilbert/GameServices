@@ -7,7 +7,7 @@ namespace GameServices.Api.Social;
 
 public record UsernameRequest(string Username);
 
-public record FriendDto(Guid UserId, string Username, bool IsOnline, DateTime? LastSeenUtc, int Unread, DateTime SinceUtc);
+public record FriendDto(Guid UserId, string Username, bool IsOnline, DateTime? LastSeenUtc, int Unread, DateTime SinceUtc, ShowcaseDto Showcase);
 
 public record RequestDto(Guid UserId, string Username, DateTime SentUtc);
 
@@ -83,7 +83,7 @@ public static class SocialEndpoints
             {
                 User other = users[f.OtherThan(me)];
                 bool online = other.LastSeenUtc != null && now - other.LastSeenUtc.Value < OnlineWindow;
-                return new FriendDto(other.Id, other.Username, online, other.LastSeenUtc, unread.GetValueOrDefault(other.Id), f.AcceptedUtc ?? f.CreatedUtc);
+                return new FriendDto(other.Id, other.Username, online, other.LastSeenUtc, unread.GetValueOrDefault(other.Id), f.AcceptedUtc ?? f.CreatedUtc, ShowcaseEndpoints.Of(other));
             })
             .OrderByDescending(f => f.IsOnline).ThenBy(f => f.Username)
             .ToList();
