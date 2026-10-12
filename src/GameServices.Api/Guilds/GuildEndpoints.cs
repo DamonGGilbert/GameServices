@@ -14,7 +14,9 @@ public record CreateGuildRequest(string Name, string Tag, string? Description, b
 
 public record GuildSummary(Guid Id, string Name, string Tag, string Description, bool IsOpen, int Members);
 
-public record MemberDto(Guid UserId, string Username, string Role, bool IsOnline);
+public record MemberDto(Guid UserId, string Username, string Role, bool IsOnline, int Slot);
+
+public record LineupRequest(Guid UserId, int Slot);
 
 public record LeaderboardEntry(string Username, int Damage, int Attacks);
 
@@ -49,6 +51,9 @@ public record GuildMessageDto(long Id, Guid UserId, string Username, string Text
 public static partial class GuildEndpoints
 {
     public const int MaxMembers = 30;
+    public const int MainTeamSize = 5;
+    public const int BenchSize = 3;
+    public const int LineupSlots = MainTeamSize + BenchSize;
     public const int MaxAttacksPerDay = 3;
     public const int MaxMessageLength = 500;
     public const int MaxMessagesPer10Seconds = 10;
@@ -74,6 +79,7 @@ public static partial class GuildEndpoints
         group.MapPost("/members/{userId:guid}/demote", (Guid userId, ClaimsPrincipal p, AppDbContext db, CancellationToken c) => ChangeRole(userId, GuildRole.Member, p, db, c));
         group.MapPost("/members/{userId:guid}/kick", Kick);
         group.MapPost("/members/{userId:guid}/transfer", Transfer);
+        group.MapPost("/lineup", SetLineup);
 
         group.MapGet("/invites", MyInvites);
         group.MapPost("/invites", Invite);
@@ -154,7 +160,7 @@ public static partial class GuildEndpoints
 
         Guild guild = new() { Name = name, NormalizedName = normalized, Tag = tag.ToUpperInvariant(), Description = description, IsOpen = request!.IsOpen };
         db.Guilds.Add(guild);
-        db.GuildMembers.Add(new GuildMember { GuildId = guild.Id, UserId = me, Role = GuildRole.Leader });
+        db.GuildMembers.Add(new GuildMember { GuildId = guild.Id, UserId = me, Role = GuildRole.Leader, Slot = 1 });
 
         try
         {
@@ -184,14 +190,16 @@ public static partial class GuildEndpoints
         Guild guild = await db.Guilds.AsNoTracking().FirstAsync(g => g.Id == membership.GuildId, cancel);
         DateTime now = DateTime.UtcNow;
 
+        await EnsureLineup(db, guild.Id, cancel);
+
         var rows = await (from m in db.GuildMembers.AsNoTracking()
                           join u in db.Users.AsNoTracking() on m.UserId equals u.Id
                           where m.GuildId == guild.Id
-                          select new { m.Role, m.UserId, u.Username, u.LastSeenUtc }).ToListAsync(cancel);
+                          select new { m.Role, m.UserId, m.Slot, u.Username, u.LastSeenUtc }).ToListAsync(cancel);
 
         List<MemberDto> members = rows
             .OrderByDescending(x => x.Role).ThenBy(x => x.Username)
-            .Select(x => new MemberDto(x.UserId, x.Username, x.Role.ToString(), x.LastSeenUtc != null && now - x.LastSeenUtc.Value < SocialEndpoints.OnlineWindow))
+            .Select(x => new MemberDto(x.UserId, x.Username, x.Role.ToString(), x.LastSeenUtc != null && now - x.LastSeenUtc.Value < SocialEndpoints.OnlineWindow, x.Slot))
             .ToList();
 
         BossInfo? boss = await BuildBossInfo(db, guild.Id, me, cancel);
@@ -232,7 +240,7 @@ public static partial class GuildEndpoints
             return Results.Problem($"That guild is full ({MaxMembers} members).", statusCode: StatusCodes.Status409Conflict);
         }
 
-        db.GuildMembers.Add(new GuildMember { GuildId = guildId, UserId = userId, Role = GuildRole.Member });
+        db.GuildMembers.Add(new GuildMember { GuildId = guildId, UserId = userId, Role = GuildRole.Member, Slot = await FirstFreeSlot(db, guildId, cancel) });
 
         // Joining uses up any invites you were holding.
         await db.GuildInvites.Where(i => i.UserId == userId).ExecuteDeleteAsync(cancel);
@@ -353,6 +361,81 @@ public static partial class GuildEndpoints
 
         target.Role = GuildRole.Leader;
         mine.Role = GuildRole.Officer;
+        await db.SaveChangesAsync(cancel);
+        return Results.NoContent();
+    }
+
+    // ------------------------------------------------------------------ line-up
+
+    // The first empty place in the line-up (main team first, then the bench), or 0 (reserve) if it is full.
+    private static async Task<int> FirstFreeSlot(AppDbContext db, Guid guildId, CancellationToken cancel)
+    {
+        List<int> taken = await db.GuildMembers.AsNoTracking().Where(m => m.GuildId == guildId && m.Slot > 0).Select(m => m.Slot).ToListAsync(cancel);
+
+        for (int slot = 1; slot <= LineupSlots; slot++)
+        {
+            if (!taken.Contains(slot))
+            {
+                return slot;
+            }
+        }
+
+        return 0;
+    }
+
+    // Guilds made before line-ups existed have nobody placed: fill it in (leader, officers, then oldest members).
+    private static async Task EnsureLineup(AppDbContext db, Guid guildId, CancellationToken cancel)
+    {
+        List<GuildMember> members = await db.GuildMembers.Where(m => m.GuildId == guildId).ToListAsync(cancel);
+
+        if (members.Count == 0 || members.Any(m => m.Slot > 0))
+        {
+            return;
+        }
+
+        int slot = 1;
+
+        foreach (GuildMember member in members.OrderByDescending(m => m.Role).ThenBy(m => m.JoinedUtc).Take(LineupSlots))
+        {
+            member.Slot = slot++;
+        }
+
+        await db.SaveChangesAsync(cancel);
+    }
+
+    // Leader and officers choose who plays where. Putting someone into a taken place swaps the two.
+    private static async Task<IResult> SetLineup(LineupRequest request, ClaimsPrincipal principal, AppDbContext db, CancellationToken cancel)
+    {
+        if (!SocialEndpoints.TryGetUserId(principal, out Guid me)) return Results.Unauthorized();
+
+        GuildMember? mine = await FindMembership(db, me, cancel);
+
+        if (mine == null || mine.Role == GuildRole.Member)
+        {
+            return Results.Problem("Only the leader and officers can change the line-up.", statusCode: StatusCodes.Status403Forbidden);
+        }
+
+        if (request == null || request.Slot < 1 || request.Slot > LineupSlots)
+        {
+            return Results.Problem($"Pick a place from 1 to {LineupSlots}.", statusCode: StatusCodes.Status400BadRequest);
+        }
+
+        List<GuildMember> members = await db.GuildMembers.Where(m => m.GuildId == mine.GuildId).ToListAsync(cancel);
+        GuildMember? target = members.FirstOrDefault(m => m.UserId == request.UserId);
+
+        if (target == null)
+        {
+            return Results.Problem("That player isn't in your guild.", statusCode: StatusCodes.Status404NotFound);
+        }
+
+        GuildMember? occupant = members.FirstOrDefault(m => m.Slot == request.Slot && m.UserId != target.UserId);
+
+        if (occupant != null)
+        {
+            occupant.Slot = target.Slot;
+        }
+
+        target.Slot = request.Slot;
         await db.SaveChangesAsync(cancel);
         return Results.NoContent();
     }

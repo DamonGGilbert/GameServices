@@ -69,6 +69,87 @@ public class GuildTests : IClassFixture<ApiFactory>
         return (leader, officer, member, guild);
     }
 
+    // ------------------------------------------------------------------ line-up (5 main + 3 bench)
+
+    private static Task<HttpResponseMessage> SetSlot(Player by, Guid userId, int slot)
+        => by.Http.PostAsJsonAsync("/api/guilds/lineup", new LineupRequest(userId, slot));
+
+    [Fact]
+    public async Task New_members_fill_the_main_team_then_the_bench_then_the_reserve()
+    {
+        Player leader = await NewPlayer();
+        GuildSummary guild = await MakeGuild(leader);
+        List<Player> joiners = new();
+
+        for (int i = 0; i < 9; i++)
+        {
+            Player joiner = await NewPlayer();
+            await JoinGuild(joiner, guild);
+            joiners.Add(joiner);
+        }
+
+        GuildDetail detail = await Mine(leader);
+        Assert.Equal(1, detail.Members.Single(m => m.UserId == leader.Id).Slot);
+
+        // 10 members, 8 places: slots 1-8 are each used once and two people wait in the reserve.
+        Assert.Equal(Enumerable.Range(1, 8), detail.Members.Where(m => m.Slot > 0).Select(m => m.Slot).OrderBy(x => x));
+        Assert.Equal(2, detail.Members.Count(m => m.Slot == 0));
+    }
+
+    [Fact]
+    public async Task Officers_can_move_members_and_a_taken_place_swaps()
+    {
+        (Player leader, Player officer, Player member, _) = await FullGuild();
+
+        GuildDetail before = await Mine(leader);
+        int memberSlot = before.Members.Single(m => m.UserId == member.Id).Slot;
+        int officerSlot = before.Members.Single(m => m.UserId == officer.Id).Slot;
+
+        Assert.Equal(HttpStatusCode.NoContent, (await SetSlot(officer, member.Id, officerSlot)).StatusCode);
+
+        GuildDetail after = await Mine(leader);
+        Assert.Equal(officerSlot, after.Members.Single(m => m.UserId == member.Id).Slot);
+        Assert.Equal(memberSlot, after.Members.Single(m => m.UserId == officer.Id).Slot);
+
+        // Into an empty place.
+        Assert.Equal(HttpStatusCode.NoContent, (await SetSlot(leader, member.Id, 8)).StatusCode);
+        Assert.Equal(8, (await Mine(leader)).Members.Single(m => m.UserId == member.Id).Slot);
+    }
+
+    [Fact]
+    public async Task Ordinary_members_cannot_change_the_line_up()
+    {
+        (Player leader, _, Player member, _) = await FullGuild();
+
+        Assert.Equal(HttpStatusCode.Forbidden, (await SetSlot(member, leader.Id, 5)).StatusCode);
+    }
+
+    [Fact]
+    public async Task The_line_up_rejects_bad_places_and_outsiders()
+    {
+        Player leader = await NewPlayer();
+        Player outsider = await NewPlayer();
+        await MakeGuild(leader);
+
+        Assert.Equal(HttpStatusCode.BadRequest, (await SetSlot(leader, leader.Id, 0)).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await SetSlot(leader, leader.Id, 9)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await SetSlot(leader, outsider.Id, 3)).StatusCode);
+    }
+
+    [Fact]
+    public async Task A_player_who_leaves_frees_their_place_for_the_next_joiner()
+    {
+        (Player leader, _, Player member, GuildSummary guild) = await FullGuild();
+        int slot = (await Mine(leader)).Members.Single(m => m.UserId == member.Id).Slot;
+
+        Assert.Equal(HttpStatusCode.NoContent, (await Post(member, "/api/guilds/leave")).StatusCode);
+
+        Player newcomer = await NewPlayer();
+        await JoinGuild(newcomer, guild);
+
+        Assert.Equal(slot, (await Mine(leader)).Members.Single(m => m.UserId == newcomer.Id).Slot);
+    }
+
     // ------------------------------------------------------------------ creating and joining
 
     [Fact]

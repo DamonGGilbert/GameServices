@@ -199,6 +199,9 @@ public class GuildMember
     public Guid UserId { get; set; }
     public GuildRole Role { get; set; }
     public DateTime JoinedUtc { get; set; } = DateTime.UtcNow;
+
+    /// <summary>Place in the guild line-up: 0 = reserve (not in the line-up), 1-5 = main team, 6-8 = bench.</summary>
+    public int Slot { get; set; }
 }
 
 public class GuildInvite

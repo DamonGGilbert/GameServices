@@ -302,6 +302,9 @@ namespace GameServices.Api.MigrationsPostgres
                     b.Property<int>("Role")
                         .HasColumnType("integer");
 
+                    b.Property<int>("Slot")
+                        .HasColumnType("integer");
+
                     b.Property<Guid>("UserId")
                         .HasColumnType("uuid");
 
