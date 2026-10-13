@@ -600,6 +600,32 @@ public class OnlineTests : IClassFixture<OnlineFactory>
         Assert.Contains(host.Got, g => g.Type == MessageTypes.Intent);
     }
 
+    private static bool Received(FakeHost host, string type, int seat)
+    {
+        lock (host.Got)
+        {
+            return host.Got.Any(g => g.Type == type && g.Seat == seat);
+        }
+    }
+
+    [Fact]
+    public async Task A_phone_can_send_its_settings_and_the_server_stamps_the_seat()
+    {
+        (_, _, FakeHost host, _, Peer phoneB) = await StartDuel();
+
+        // Phone B (seat 1) lies about its seat. The host must still see seat 1.
+        await phoneB.SendAsync(MessageTypes.Settings, "{\"respond\":\"Off\",\"speed\":\"Fast\"}", seat: 0);
+
+        // Wait (a moment at most) for the host to receive it.
+        for (int i = 0; i < 100 && !Received(host, MessageTypes.Settings, 1); i++)
+        {
+            await Task.Delay(30);
+        }
+
+        Assert.True(Received(host, MessageTypes.Settings, 1), "the host should have got phone B's settings, stamped seat 1");
+        Assert.False(Received(host, MessageTypes.Settings, 0), "seat 0 never sent any");
+    }
+
     [Fact]
     public async Task A_finished_duel_pays_rewards_and_is_recorded()
     {

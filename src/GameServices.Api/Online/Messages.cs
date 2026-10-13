@@ -41,6 +41,7 @@ public static class MessageTypes
     public const string Intent = "intent";
     public const string Answer = "answer";
     public const string Resync = "resync";
+    public const string Settings = "settings";   // how the player wants to be asked to respond, and how fast the duel is
 
     // server <-> host
     public const string Start = "start";
