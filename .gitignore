@@ -10,3 +10,7 @@ appsettings.Production.json
 secrets.json
 
 .env
+
+# The built duel host program (rebuilt from the game project)
+duelhost/
+logs/
