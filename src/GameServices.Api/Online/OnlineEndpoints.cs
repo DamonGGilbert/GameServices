@@ -70,7 +70,7 @@ public static partial class OnlineEndpoints
     private static async Task<RoomSeat?> MakeSeat(AppDbContext db, Guid userId, CancellationToken cancel)
     {
         var user = await db.Users.AsNoTracking().Where(u => u.Id == userId)
-            .Select(u => new { u.Username, u.ShowLevel, u.ShowPrestige, u.ShowEmblem, u.ShowFrame, u.ShowTitle, u.CosmeticsJson }).FirstOrDefaultAsync(cancel);
+            .Select(u => new { u.Username, u.ShowLevel, u.ShowPrestige, u.ShowEmblem, u.ShowFrame, u.ShowTitle, u.CosmeticsJson, u.ProfileJson }).FirstOrDefaultAsync(cancel);
 
         if (user == null)
         {
@@ -84,7 +84,7 @@ public static partial class OnlineEndpoints
                            where m.UserId == userId
                            select new { g.Id, g.Tag, g.Name }).FirstOrDefaultAsync(cancel);
 
-        return new RoomSeat { UserId = userId, Username = name, GuildId = guild?.Id, GuildTag = guild?.Tag ?? "", GuildName = guild?.Name ?? "", Showcase = new GameServices.Api.Social.ShowcaseDto(user.ShowLevel, user.ShowPrestige, user.ShowEmblem, user.ShowFrame, user.ShowTitle), Cosmetics = user.CosmeticsJson };
+        return new RoomSeat { UserId = userId, Username = name, GuildId = guild?.Id, GuildTag = guild?.Tag ?? "", GuildName = guild?.Name ?? "", Showcase = new GameServices.Api.Social.ShowcaseDto(user.ShowLevel, user.ShowPrestige, user.ShowEmblem, user.ShowFrame, user.ShowTitle), Cosmetics = user.CosmeticsJson, Greeting = GameServices.Api.Social.ProfileCardEndpoints.Read(user.ProfileJson).Greeting };
     }
 
     private static async Task<IResult> CreateRoom(CreateRoomRequest request, ClaimsPrincipal principal, AppDbContext db, RoomRegistry registry, CancellationToken cancel)

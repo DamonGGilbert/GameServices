@@ -621,6 +621,11 @@ namespace GameServices.Api.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("ProfileJson")
+                        .IsRequired()
+                        .HasMaxLength(3000)
+                        .HasColumnType("TEXT");
+
                     b.Property<int>("ShowEmblem")
                         .HasColumnType("INTEGER");
 

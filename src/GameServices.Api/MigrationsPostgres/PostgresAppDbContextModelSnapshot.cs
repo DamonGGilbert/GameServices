@@ -630,6 +630,11 @@ namespace GameServices.Api.MigrationsPostgres
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<string>("ProfileJson")
+                        .IsRequired()
+                        .HasMaxLength(3000)
+                        .HasColumnType("character varying(3000)");
+
                     b.Property<int>("ShowEmblem")
                         .HasColumnType("integer");
 

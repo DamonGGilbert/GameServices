@@ -44,6 +44,9 @@ public class User
     /// </summary>
     public string CosmeticsJson { get; set; } = "";
 
+    /// <summary>The player's PROFILE CARD choices (greeting, favourite card and deck, stats), as JSON. See ProfileCardEndpoints.</summary>
+    public string ProfileJson { get; set; } = "";
+
     public List<RefreshToken> RefreshTokens { get; set; } = new();
 }
 

@@ -20,6 +20,7 @@ public class RoomSeat
     public string GuildName { get; init; } = "";
     public GameServices.Api.Social.ShowcaseDto Showcase { get; init; } = new(1, 0, 0, 0, "");
     public string Cosmetics { get; init; } = "";
+    public string Greeting { get; init; } = "";
     public DeckList? Deck { get; set; }
     public bool Ready => Deck != null;
 }
@@ -48,7 +49,7 @@ public class Room
     public int SeatOf(Guid userId) => Seats[0]?.UserId == userId ? 0 : Seats[1]?.UserId == userId ? 1 : -1;
 }
 
-public record RoomSeatDto(string Username, string GuildTag, bool Ready, GameServices.Api.Social.ShowcaseDto? Showcase = null, string? Cosmetics = null);
+public record RoomSeatDto(string Username, string GuildTag, bool Ready, GameServices.Api.Social.ShowcaseDto? Showcase = null, string? Cosmetics = null, string? Greeting = null);
 
 public record RoomDto(Guid Id, string Name, string Status, bool GuildMatch, List<RoomSeatDto> Seats, bool CanJoin, bool Mine, int MySeat, string MatchId, string Error, DateTime CreatedUtc);
 
@@ -250,7 +251,7 @@ public class RoomRegistry
         int mySeat = viewer != null ? room.SeatOf(viewer.Value) : -1;
 
         List<RoomSeatDto> seats = room.Seats
-            .Select(s => s == null ? new RoomSeatDto("", "", false) : new RoomSeatDto(s.Username, s.GuildTag, s.Ready, s.Showcase, s.Cosmetics))
+            .Select(s => s == null ? new RoomSeatDto("", "", false) : new RoomSeatDto(s.Username, s.GuildTag, s.Ready, s.Showcase, s.Cosmetics, s.Greeting))
             .ToList();
 
         bool canJoin = mySeat < 0 && room.Status == RoomStatus.Waiting && !room.IsFull;

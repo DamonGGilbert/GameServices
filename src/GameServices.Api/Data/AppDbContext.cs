@@ -62,6 +62,7 @@ public class AppDbContext : DbContext
             user.Property(u => u.Email).HasMaxLength(254);
             user.Property(u => u.NormalizedEmail).HasMaxLength(254);
             user.Property(u => u.CosmeticsJson).HasMaxLength(2000).IsRequired();
+            user.Property(u => u.ProfileJson).HasMaxLength(3000).IsRequired();
 
             // The database itself guarantees no duplicate usernames, even if two
             // sign-ups arrive at the same instant (a "race condition").
