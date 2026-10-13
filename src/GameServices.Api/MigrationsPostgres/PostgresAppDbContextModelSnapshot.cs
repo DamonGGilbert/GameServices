@@ -126,6 +126,76 @@ namespace GameServices.Api.MigrationsPostgres
                     b.ToTable("ChatMessages");
                 });
 
+            modelBuilder.Entity("GameServices.Api.Data.DuelMatch", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("EndedUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Guild0Delta")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("Guild0Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Guild1Delta")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("Guild1Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("GuildMatch")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("Player0Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Player0Name")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<Guid>("Player1Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Player1Name")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("RoomName")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<DateTime>("StartedUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Turns")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("WinnerSeat")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EndedUtc");
+
+                    b.HasIndex("Player0Id");
+
+                    b.HasIndex("Player1Id");
+
+                    b.ToTable("DuelMatches");
+                });
+
             modelBuilder.Entity("GameServices.Api.Data.Friendship", b =>
                 {
                     b.Property<Guid>("Id")
@@ -174,8 +244,14 @@ namespace GameServices.Api.MigrationsPostgres
                         .HasMaxLength(140)
                         .HasColumnType("character varying(140)");
 
+                    b.Property<int>("Draws")
+                        .HasColumnType("integer");
+
                     b.Property<bool>("IsOpen")
                         .HasColumnType("boolean");
+
+                    b.Property<int>("Losses")
+                        .HasColumnType("integer");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -187,10 +263,16 @@ namespace GameServices.Api.MigrationsPostgres
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
 
+                    b.Property<int>("Rating")
+                        .HasColumnType("integer");
+
                     b.Property<string>("Tag")
                         .IsRequired()
                         .HasMaxLength(4)
                         .HasColumnType("character varying(4)");
+
+                    b.Property<int>("Wins")
+                        .HasColumnType("integer");
 
                     b.HasKey("Id");
 

@@ -197,6 +197,37 @@ public class Guild
     public bool IsOpen { get; set; } = true;
 
     public DateTime CreatedUtc { get; set; } = DateTime.UtcNow;
+
+    // How the guild does in Guild Matches (duels against another guild). The leaderboard ranks by Rating.
+    public int Rating { get; set; } = 1000;
+    public int Wins { get; set; }
+    public int Losses { get; set; }
+    public int Draws { get; set; }
+}
+
+/// <summary>One finished online duel (history).</summary>
+public class DuelMatch
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public string RoomName { get; set; } = "";
+    public DateTime StartedUtc { get; set; }
+    public DateTime EndedUtc { get; set; } = DateTime.UtcNow;
+
+    public Guid Player0Id { get; set; }
+    public Guid Player1Id { get; set; }
+    public string Player0Name { get; set; } = "";
+    public string Player1Name { get; set; } = "";
+
+    /// <summary>0 or 1; -1 = draw / no result.</summary>
+    public int WinnerSeat { get; set; } = -1;
+    public string Reason { get; set; } = "";
+    public int Turns { get; set; }
+
+    public bool GuildMatch { get; set; }
+    public Guid? Guild0Id { get; set; }
+    public Guid? Guild1Id { get; set; }
+    public int Guild0Delta { get; set; }
+    public int Guild1Delta { get; set; }
 }
 
 /// <summary>Membership. A player can be in at most ONE guild (the unique index on UserId enforces it).</summary>

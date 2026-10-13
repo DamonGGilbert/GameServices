@@ -2,7 +2,11 @@ using System.Text.Json;
 
 namespace GameServices.Api.Catalog;
 
-public record CatalogCard(string Id, string Name, string Rarity, int Category, int Atk = 0);
+/// <summary>
+/// Extra = an Extra Deck card (Fusion Monster). Limit = how many copies may be in a deck (3 normally;
+/// 2, 1 or 0 on the ban list). Both are exported from Unity along with the rest.
+/// </summary>
+public record CatalogCard(string Id, string Name, string Rarity, int Category, int Atk = 0, bool Extra = false, int Limit = 3);
 
 public record StarterEntry(string Id, int Qty);
 

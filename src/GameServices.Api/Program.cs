@@ -6,6 +6,7 @@ using GameServices.Api.Social;
 using GameServices.Api.Economy;
 using GameServices.Api.Data;
 using GameServices.Api.Infrastructure;
+using GameServices.Api.Online;
 using GameServices.Api.Saves;
 using Microsoft.EntityFrameworkCore;
 using Scalar.AspNetCore;
@@ -40,6 +41,7 @@ if (await AdminCommands.TryRun(app.Services, args))
 app.UseExceptionHandler();      // turn unexpected crashes into a clean 500 instead of leaking details
 app.UseStatusCodePages();
 app.UseRateLimiter();           // slow down abuse
+app.UseWebSockets();            // duel sockets (/ws/duel for phones, /ws/host for the duel host)
 app.UseAuthentication();        // "who are you?"  (reads the access token)
 app.UseAuthorization();         // "are you allowed?"
 
@@ -60,6 +62,7 @@ app.MapSocialEndpoints();
 app.MapChatEndpoints();
 app.MapGuildEndpoints();
 app.MapShowcaseEndpoints();
+app.MapOnlineEndpoints();
 app.MapHub<ChatHub>("/hubs/chat");
 
 app.Run();

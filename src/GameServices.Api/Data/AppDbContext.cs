@@ -29,6 +29,7 @@ public class AppDbContext : DbContext
     public DbSet<UserBlock> Blocks => Set<UserBlock>();
     public DbSet<ChatMessage> ChatMessages => Set<ChatMessage>();
     public DbSet<Guild> Guilds => Set<Guild>();
+    public DbSet<DuelMatch> DuelMatches => Set<DuelMatch>();
     public DbSet<GuildMember> GuildMembers => Set<GuildMember>();
     public DbSet<GuildInvite> GuildInvites => Set<GuildInvite>();
     public DbSet<GuildMessage> GuildMessages => Set<GuildMessage>();
@@ -132,6 +133,18 @@ public class AppDbContext : DbContext
             m.HasIndex(x => new { x.SenderId, x.SentUtc });
             m.HasOne<User>().WithMany().HasForeignKey(x => x.SenderId).OnDelete(DeleteBehavior.Cascade);
             m.HasOne<User>().WithMany().HasForeignKey(x => x.RecipientId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        model.Entity<DuelMatch>(match =>
+        {
+            match.HasKey(m => m.Id);
+            match.Property(m => m.RoomName).HasMaxLength(40);
+            match.Property(m => m.Player0Name).HasMaxLength(20);
+            match.Property(m => m.Player1Name).HasMaxLength(20);
+            match.Property(m => m.Reason).HasMaxLength(200);
+            match.HasIndex(m => m.EndedUtc);
+            match.HasIndex(m => m.Player0Id);
+            match.HasIndex(m => m.Player1Id);
         });
 
         model.Entity<Guild>(g =>

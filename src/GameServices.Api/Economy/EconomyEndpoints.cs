@@ -187,7 +187,21 @@ public static class EconomyEndpoints
             return Results.ValidationProblem(new Dictionary<string, string[]> { ["result"] = new[] { "Result must be win, loss or draw." } });
         }
 
-        // The amount is decided HERE. The client only says how the duel went, never how much to pay.
+        PayResult paid = await PayDuelReward(db, catalog, userId, result, cancel);
+
+        return paid.Reward != null
+            ? Results.Ok(paid.Reward)
+            : Results.Problem(paid.Problem, statusCode: paid.Status);
+    }
+
+    public record PayResult(RewardResponse? Reward, string? Problem, int Status);
+
+    /// <summary>
+    /// Pays the duel reward for "win", "loss" or "draw". The amount is decided HERE, never by the game, and the
+    /// same limits apply whether the game claims a single-player reward or the server pays for an online duel.
+    /// </summary>
+    public static async Task<PayResult> PayDuelReward(AppDbContext db, CardCatalog catalog, Guid userId, string result, CancellationToken cancel)
+    {
         int amount = result == "win" ? WinReward : LossReward;
 
         CardGameProfile profile = await GetOrCreateProfile(db, catalog, userId, cancel);
@@ -195,12 +209,12 @@ public static class EconomyEndpoints
 
         if (profile.LastRewardUtc != null && now - profile.LastRewardUtc.Value < MinTimeBetweenRewards)
         {
-            return Results.Problem("That was too soon after your last reward. Duels take longer than that!", statusCode: StatusCodes.Status429TooManyRequests);
+            return new PayResult(null, "That was too soon after your last reward. Duels take longer than that!", StatusCodes.Status429TooManyRequests);
         }
 
         if (RewardsLeft(profile, now) <= 0)
         {
-            return Results.Problem("You've reached today's reward limit. Come back tomorrow!", statusCode: StatusCodes.Status429TooManyRequests);
+            return new PayResult(null, "You've reached today's reward limit. Come back tomorrow!", StatusCodes.Status429TooManyRequests);
         }
 
         int today = DayNumber(now);
@@ -224,10 +238,10 @@ public static class EconomyEndpoints
         }
         catch (DbUpdateException)
         {
-            return Results.Problem("Your wallet changed while this was being processed. Please try again.", statusCode: StatusCodes.Status409Conflict);
+            return new PayResult(null, "Your wallet changed while this was being processed. Please try again.", StatusCodes.Status409Conflict);
         }
 
-        return Results.Ok(new RewardResponse(amount, profile.DuelPoints, RewardsLeft(profile, now)));
+        return new PayResult(new RewardResponse(amount, profile.DuelPoints, RewardsLeft(profile, now)), null, 200);
     }
 
     // ------------------------------------------------------------------ ledger

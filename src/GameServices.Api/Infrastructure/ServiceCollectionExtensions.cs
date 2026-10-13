@@ -48,6 +48,14 @@ public static class ServiceCollectionExtensions
             services.AddSingleton<GameServices.Api.Email.IEmailSender, GameServices.Api.Email.LogEmailSender>();
         }
 
+        // ---- Online duels ----
+        services.Configure<GameServices.Api.Online.OnlineOptions>(configuration.GetSection(GameServices.Api.Online.OnlineOptions.SectionName));
+        services.AddSingleton<GameServices.Api.Online.RoomRegistry>();
+        services.AddSingleton<GameServices.Api.Online.IHostLauncher, GameServices.Api.Online.ProcessHostLauncher>();
+        services.AddSingleton<GameServices.Api.Online.MatchCoordinator>();
+        services.AddScoped<GameServices.Api.Online.MatchResults>();
+        services.AddHostedService<GameServices.Api.Online.RoomSweeperService>();
+
         // ---- Tokens ----
         JwtOptions jwt = configuration.GetSection(JwtOptions.SectionName).Get<JwtOptions>() ?? new JwtOptions();
 
@@ -83,7 +91,7 @@ public static class ServiceCollectionExtensions
                     {
                         string? token = context.Request.Query["access_token"];
 
-                        if (!string.IsNullOrEmpty(token) && context.HttpContext.Request.Path.StartsWithSegments("/hubs"))
+                        if (!string.IsNullOrEmpty(token) && (context.HttpContext.Request.Path.StartsWithSegments("/hubs") || context.HttpContext.Request.Path.StartsWithSegments("/ws")))
                         {
                             context.Token = token;
                         }
