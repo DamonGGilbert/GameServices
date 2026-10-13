@@ -33,6 +33,12 @@ public class OnlineOptions
 
     /// <summary>The host socket only accepts programs on this PC (switched off in tests only).</summary>
     public bool HostMustBeLocal { get; set; } = true;
+
+    /// <summary>
+    /// Decks may only use cards the account owns ON THE SERVER. Switch off while testing, when accounts still
+    /// have older collections that only exist on the phone or PC (never in a real release).
+    /// </summary>
+    public bool RequireOwnedCards { get; set; } = true;
 }
 
 /// <summary>Starts (and stops) the duel host programs. A fake one is used in tests.</summary>

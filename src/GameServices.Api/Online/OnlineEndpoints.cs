@@ -165,7 +165,7 @@ public static partial class OnlineEndpoints
         return Results.NoContent();
     }
 
-    private static async Task<IResult> SetDeck(DeckRequest request, ClaimsPrincipal principal, AppDbContext db, RoomRegistry registry, CardCatalog catalog, MatchCoordinator coordinator, CancellationToken cancel)
+    private static async Task<IResult> SetDeck(DeckRequest request, ClaimsPrincipal principal, AppDbContext db, RoomRegistry registry, CardCatalog catalog, MatchCoordinator coordinator, Microsoft.Extensions.Options.IOptions<OnlineOptions> options, CancellationToken cancel)
     {
         if (!TryUser(principal, out Guid me)) return Results.Unauthorized();
 
@@ -186,6 +186,11 @@ public static partial class OnlineEndpoints
         Dictionary<string, int> owned = await db.OwnedCards.AsNoTracking()
             .Where(c => c.UserId == me)
             .ToDictionaryAsync(c => c.CardId, c => c.Quantity, cancel);
+
+        if (!options.Value.RequireOwnedCards)
+        {
+            owned = deck.Main.Concat(deck.Extra).GroupBy(id => id).ToDictionary(g => g.Key, g => g.Count());
+        }
 
         List<string> problems = DeckValidator.Check(deck, catalog, owned);
 
