@@ -38,6 +38,12 @@ public class User
     public int ShowFrame { get; set; }
     public string ShowTitle { get; set; } = "";
 
+    /// <summary>
+    /// How the player dresses their side of the table (zone colours, playmat, card sleeve): a small JSON document
+    /// the game writes and reads. The server only keeps it tidy (size, valid JSON) so opponents can show it.
+    /// </summary>
+    public string CosmeticsJson { get; set; } = "";
+
     public List<RefreshToken> RefreshTokens { get; set; } = new();
 }
 
@@ -308,4 +314,16 @@ public class PasswordResetCode
     public DateTime ExpiresUtc { get; set; }
     public int Attempts { get; set; }
     public DateTime? UsedUtc { get; set; }
+}
+
+/// <summary>
+/// A player's profile picture: a small image (the game sends a 128 x 128 JPEG) so friends, guildmates and
+/// opponents can see it. One per player; kept apart from User so ordinary user queries stay light.
+/// </summary>
+public class UserAvatar
+{
+    public Guid UserId { get; set; }
+    public byte[] Data { get; set; } = Array.Empty<byte>();
+    public string ContentType { get; set; } = "image/jpeg";
+    public DateTime UpdatedUtc { get; set; } = DateTime.UtcNow;
 }

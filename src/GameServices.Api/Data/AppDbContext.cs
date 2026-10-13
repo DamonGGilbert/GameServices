@@ -36,6 +36,7 @@ public class AppDbContext : DbContext
     public DbSet<GuildBoss> GuildBosses => Set<GuildBoss>();
     public DbSet<BossContribution> BossContributions => Set<BossContribution>();
     public DbSet<PasswordResetCode> PasswordResetCodes => Set<PasswordResetCode>();
+    public DbSet<UserAvatar> Avatars => Set<UserAvatar>();
 
     // SQLite doesn't remember that a date is UTC, so we put the "UTC" label back
     // whenever we read one. Otherwise clients would see dates without the trailing Z.
@@ -60,6 +61,7 @@ public class AppDbContext : DbContext
             user.Property(u => u.NormalizedUsername).HasMaxLength(20).IsRequired();
             user.Property(u => u.Email).HasMaxLength(254);
             user.Property(u => u.NormalizedEmail).HasMaxLength(254);
+            user.Property(u => u.CosmeticsJson).HasMaxLength(2000).IsRequired();
 
             // The database itself guarantees no duplicate usernames, even if two
             // sign-ups arrive at the same instant (a "race condition").
@@ -133,6 +135,13 @@ public class AppDbContext : DbContext
             m.HasIndex(x => new { x.SenderId, x.SentUtc });
             m.HasOne<User>().WithMany().HasForeignKey(x => x.SenderId).OnDelete(DeleteBehavior.Cascade);
             m.HasOne<User>().WithMany().HasForeignKey(x => x.RecipientId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        model.Entity<UserAvatar>(avatar =>
+        {
+            avatar.HasKey(a => a.UserId);
+            avatar.Property(a => a.ContentType).HasMaxLength(20).IsRequired();
+            avatar.HasOne<User>().WithMany().HasForeignKey(a => a.UserId).OnDelete(DeleteBehavior.Cascade);
         });
 
         model.Entity<DuelMatch>(match =>

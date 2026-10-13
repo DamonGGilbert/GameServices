@@ -8,6 +8,9 @@ namespace GameServices.Api.Social;
 /// <summary>What a player shows off: level, prestige rank, emblem, avatar frame and a title.</summary>
 public record ShowcaseDto(int Level, int Prestige, int Emblem, int Frame, string Title);
 
+/// <summary>The look of a player's side of the table, as JSON text.</summary>
+public record CosmeticsRequest(string Json);
+
 /// <summary>
 /// SHOWCASE:  PUT /api/profile/showcase
 ///
@@ -29,7 +32,46 @@ public static partial class ShowcaseEndpoints
     public static IEndpointRouteBuilder MapShowcaseEndpoints(this IEndpointRouteBuilder app)
     {
         app.MapPut("/api/profile/showcase", Set).WithTags("Profile").RequireAuthorization();
+        app.MapPut("/api/profile/cosmetics", SetCosmetics).WithTags("Profile").RequireAuthorization();
         return app;
+    }
+
+    public const int MaxCosmeticsLength = 2000;
+
+    // The look of your side of the table, as the game's own JSON. Kept as text; it must be one JSON object and small.
+    private static async Task<IResult> SetCosmetics(CosmeticsRequest request, ClaimsPrincipal principal, AppDbContext db, CancellationToken cancel)
+    {
+        if (!SocialEndpoints.TryGetUserId(principal, out Guid me)) return Results.Unauthorized();
+
+        string json = (request?.Json ?? "").Trim();
+
+        bool valid = json.Length <= MaxCosmeticsLength;
+
+        if (valid && json.Length > 0)
+        {
+            try
+            {
+                using System.Text.Json.JsonDocument document = System.Text.Json.JsonDocument.Parse(json);
+                valid = document.RootElement.ValueKind == System.Text.Json.JsonValueKind.Object;
+            }
+            catch (System.Text.Json.JsonException)
+            {
+                valid = false;
+            }
+        }
+
+        if (!valid)
+        {
+            return Results.Problem("That look isn't valid.", statusCode: StatusCodes.Status400BadRequest);
+        }
+
+        User? user = await db.Users.FirstOrDefaultAsync(u => u.Id == me, cancel);
+
+        if (user == null) return Results.Unauthorized();
+
+        user.CosmeticsJson = json;
+        await db.SaveChangesAsync(cancel);
+        return Results.NoContent();
     }
 
     private static async Task<IResult> Set(ShowcaseDto request, ClaimsPrincipal principal, AppDbContext db, CancellationToken cancel)

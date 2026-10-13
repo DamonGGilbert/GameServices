@@ -62,6 +62,7 @@ app.MapSocialEndpoints();
 app.MapChatEndpoints();
 app.MapGuildEndpoints();
 app.MapShowcaseEndpoints();
+app.MapAvatarEndpoints();
 app.MapOnlineEndpoints();
 app.MapHub<ChatHub>("/hubs/chat");
 
