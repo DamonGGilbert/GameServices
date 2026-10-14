@@ -42,6 +42,7 @@ public static class MessageTypes
     public const string Answer = "answer";
     public const string Resync = "resync";
     public const string Settings = "settings";   // how the player wants to be asked to respond, and how fast the duel is
+    public const string Timeout = "timeout";     // "I call my timeout" (the duel host adds time to the clock that is running)
 
     // server <-> host
     public const string Start = "start";

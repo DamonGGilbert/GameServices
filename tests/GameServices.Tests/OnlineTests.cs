@@ -627,6 +627,23 @@ public class OnlineTests : IClassFixture<OnlineFactory>
     }
 
     [Fact]
+    public async Task A_phone_can_call_a_timeout_and_the_server_stamps_the_seat()
+    {
+        (_, _, FakeHost host, Peer phoneA, _) = await StartDuel();
+
+        // Phone A (seat 0) lies about its seat. The host must still see seat 0 ... and it must be the only one asking.
+        await phoneA.SendAsync(MessageTypes.Timeout, "", seat: 1);
+
+        for (int i = 0; i < 100 && !Received(host, MessageTypes.Timeout, 0); i++)
+        {
+            await Task.Delay(30);
+        }
+
+        Assert.True(Received(host, MessageTypes.Timeout, 0), "the host should have got phone A's timeout, stamped seat 0");
+        Assert.False(Received(host, MessageTypes.Timeout, 1), "seat 1 never asked for one");
+    }
+
+    [Fact]
     public async Task A_finished_duel_pays_rewards_and_is_recorded()
     {
         (Player a, Player b, _, Peer phoneA, Peer phoneB) = await StartDuel(new FakeHost { TurnsToPlay = 3, WinnerSeat = 0 });

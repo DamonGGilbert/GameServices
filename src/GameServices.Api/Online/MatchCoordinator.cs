@@ -467,7 +467,7 @@ public class MatchCoordinator
         await phone.CloseAsync("bye");
     }
 
-    private static bool AllowedFromPhone(string type) => type is MessageTypes.Intent or MessageTypes.Answer or MessageTypes.Resync or MessageTypes.Settings;
+    private static bool AllowedFromPhone(string type) => type is MessageTypes.Intent or MessageTypes.Answer or MessageTypes.Resync or MessageTypes.Settings or MessageTypes.Timeout;
 
     // A phone may send a burst, but not flood the host.
     private static bool TooFast(Match match, int seat)
