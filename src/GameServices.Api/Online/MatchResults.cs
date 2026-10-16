@@ -83,6 +83,9 @@ public class MatchResults
                     if (winner == 0) { g0.Wins++; g1.Losses++; }
                     else if (winner == 1) { g1.Wins++; g0.Losses++; }
                     else { g0.Draws++; g1.Draws++; }
+
+                    // If the two guilds are at war this weekend, this duel counts for it.
+                    await GameServices.Api.Guilds.GuildWars.RecordDuelAsync(db, g0.Id, g1.Id, seat0.UserId, seat1.UserId, winner, DateTime.UtcNow, cancel);
                 }
 
                 guildRating[0] = g0.Rating;
@@ -104,12 +107,7 @@ public class MatchResults
             Guid userId = seats[seat].UserId;
             string outcome = winner < 0 ? "draw" : winner == seat ? "win" : "loss";
 
-            if (counts)
-            {
-                EconomyEndpoints.PayResult paid = await EconomyEndpoints.PayDuelReward(db, catalog, userId, outcome, cancel);
-                awarded = paid.Reward?.Awarded ?? 0;
-            }
-
+            // Online duels pay no Duel Points (they are for glory, ranking and the guild wars).
             CardGameProfile profile = await EconomyEndpoints.GetOrCreateProfile(db, catalog, userId, cancel);
             messages[seat] = new RewardsMessage(awarded, profile.DuelPoints, guildDelta[seat], guildRating[seat], guildName[seat], room.GuildMatch);
         }

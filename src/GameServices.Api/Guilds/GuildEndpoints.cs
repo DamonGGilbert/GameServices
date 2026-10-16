@@ -12,7 +12,7 @@ namespace GameServices.Api.Guilds;
 
 public record CreateGuildRequest(string Name, string Tag, string? Description, bool IsOpen);
 
-public record GuildSummary(Guid Id, string Name, string Tag, string Description, bool IsOpen, int Members);
+public record GuildSummary(Guid Id, string Name, string Tag, string Description, bool IsOpen, int Members, int Rating = 1000, int Tier = 0, string TierName = "Rookie");
 
 public record MemberDto(Guid UserId, string Username, string Role, bool IsOnline, int Slot, ShowcaseDto Showcase);
 
@@ -22,7 +22,9 @@ public record LeaderboardEntry(string Username, int Damage, int Attacks);
 
 public record BossInfo(Guid Id, string Key, string Name, int MaxHp, int CurrentHp, string Status, DateTime EndsUtc, int RewardPool, int MyAttacksLeft, List<LeaderboardEntry> Leaderboard);
 
-public record GuildDetail(Guid Id, string Name, string Tag, string Description, bool IsOpen, string MyRole, List<MemberDto> Members, BossInfo? Boss);
+public record GuildDetail(Guid Id, string Name, string Tag, string Description, bool IsOpen, string MyRole, List<MemberDto> Members, BossInfo? Boss, DateTime? NextNameChangeUtc, int Rating = 1000, int Tier = 0, string TierName = "Rookie", int WarWins = 0, int WarLosses = 0, int BannerStyle = 0);
+
+public record UpdateGuildRequest(string? Name, string? Tag, string? Description, bool? IsOpen, int? BannerStyle = null);
 
 public record InviteDto(Guid GuildId, string GuildName, string GuildTag, string InvitedBy, DateTime ExpiresUtc);
 
@@ -58,6 +60,7 @@ public static partial class GuildEndpoints
     public const int MaxMessageLength = 500;
     public const int MaxMessagesPer10Seconds = 10;
     public static readonly TimeSpan InviteLifetime = TimeSpan.FromDays(3);
+    public static readonly TimeSpan NameChangeCooldown = TimeSpan.FromDays(14);
 
     [GeneratedRegex("^[A-Za-z0-9 ]{3,20}$")]
     private static partial Regex NameRule();
@@ -74,6 +77,8 @@ public static partial class GuildEndpoints
         group.MapGet("/mine", Mine);
         group.MapPost("/{guildId:guid}/join", Join);
         group.MapPost("/leave", Leave);
+        group.MapPut("/details", UpdateDetails);
+        group.MapGet("/war", War);
 
         group.MapPost("/members/{userId:guid}/promote", (Guid userId, ClaimsPrincipal p, AppDbContext db, CancellationToken c) => ChangeRole(userId, GuildRole.Officer, p, db, c));
         group.MapPost("/members/{userId:guid}/demote", (Guid userId, ClaimsPrincipal p, AppDbContext db, CancellationToken c) => ChangeRole(userId, GuildRole.Member, p, db, c));
@@ -120,9 +125,9 @@ public static partial class GuildEndpoints
             .ToDictionaryAsync(x => x.Id, x => x.Count, cancel);
 
         List<GuildSummary> result = found
-            .Select(g => new GuildSummary(g.Id, g.Name, g.Tag, g.Description, g.IsOpen, counts.GetValueOrDefault(g.Id)))
+            .Select(g => new GuildSummary(g.Id, g.Name, g.Tag, g.Description, g.IsOpen, counts.GetValueOrDefault(g.Id), g.Rating, GuildTiers.TierOf(g.Rating, g.WarWins), GuildTiers.NameOf(GuildTiers.TierOf(g.Rating, g.WarWins))))
             .OrderByDescending(g => g.Members).ThenBy(g => g.Name)
-            .Take(25)
+            .Take(50)
             .ToList();
 
         return Results.Ok(result);
@@ -204,7 +209,136 @@ public static partial class GuildEndpoints
 
         BossInfo? boss = await BuildBossInfo(db, guild.Id, me, cancel);
 
-        return Results.Ok(new GuildDetail(guild.Id, guild.Name, guild.Tag, guild.Description, guild.IsOpen, membership.Role.ToString(), members, boss));
+        DateTime? nextNameChange = guild.NameChangedUtc != null && guild.NameChangedUtc.Value + NameChangeCooldown > now
+            ? guild.NameChangedUtc.Value + NameChangeCooldown
+            : null;
+
+        int tier = GuildTiers.TierOf(guild.Rating, guild.WarWins);
+
+        return Results.Ok(new GuildDetail(guild.Id, guild.Name, guild.Tag, guild.Description, guild.IsOpen, membership.Role.ToString(), members, boss, nextNameChange,
+            guild.Rating, tier, GuildTiers.NameOf(tier), guild.WarWins, guild.WarLosses, guild.BannerStyle));
+    }
+
+    // ------------------------------------------------------------------ guild details (leader only)
+
+    /// <summary>
+    /// The leader can change the description and the open/invite-only setting any time. Changing the NAME or TAG
+    /// is limited to once every 14 days, so a guild's identity can't be swapped back and forth to dodge a bad name.
+    /// Only the fields that are sent are changed.
+    /// </summary>
+    private static async Task<IResult> UpdateDetails(UpdateGuildRequest request, ClaimsPrincipal principal, AppDbContext db, CancellationToken cancel)
+    {
+        if (!SocialEndpoints.TryGetUserId(principal, out Guid me)) return Results.Unauthorized();
+
+        GuildMember? mine = await FindMembership(db, me, cancel);
+
+        if (mine == null || mine.Role != GuildRole.Leader)
+        {
+            return Results.Problem("Only the guild leader can change the guild's details.", statusCode: StatusCodes.Status403Forbidden);
+        }
+
+        Guild guild = await db.Guilds.FirstAsync(g => g.Id == mine.GuildId, cancel);
+        DateTime now = DateTime.UtcNow;
+        Dictionary<string, string[]> problems = new();
+
+        string? newName = request?.Name?.Trim();
+        string? newTag = request?.Tag?.Trim();
+        string? newDescription = request?.Description?.Trim();
+
+        bool nameChanges = newName != null && newName != guild.Name;
+        bool tagChanges = newTag != null && !string.Equals(newTag, guild.Tag, StringComparison.OrdinalIgnoreCase);
+
+        if (nameChanges && !NameRule().IsMatch(newName!)) problems["name"] = new[] { "Guild names are 3-20 letters, numbers or spaces." };
+        if (tagChanges && !TagRule().IsMatch(newTag!)) problems["tag"] = new[] { "The tag is 2-4 letters or numbers." };
+        if (newDescription != null && newDescription.Length > 140) problems["description"] = new[] { "The description can be at most 140 characters." };
+
+        // Banner styles are unlocked by the guild's tier (its rating and war wins).
+        if (request?.BannerStyle != null)
+        {
+            int tier = GuildTiers.TierOf(guild.Rating, guild.WarWins);
+
+            if (request.BannerStyle < 0 || request.BannerStyle > tier)
+            {
+                problems["bannerStyle"] = new[] { $"Your guild is {GuildTiers.NameOf(tier)} tier and hasn't unlocked that banner yet." };
+            }
+        }
+
+        if (problems.Count > 0)
+        {
+            return Results.ValidationProblem(problems);
+        }
+
+        if ((nameChanges || tagChanges) && guild.NameChangedUtc != null && guild.NameChangedUtc.Value + NameChangeCooldown > now)
+        {
+            TimeSpan left = guild.NameChangedUtc.Value + NameChangeCooldown - now;
+            return Results.Problem($"The name and tag can only be changed every 14 days. Try again in {(int)Math.Ceiling(left.TotalDays)} day(s).", statusCode: StatusCodes.Status429TooManyRequests);
+        }
+
+        if (nameChanges)
+        {
+            string normalized = newName!.ToUpperInvariant();
+
+            if (await db.Guilds.AnyAsync(g => g.NormalizedName == normalized && g.Id != guild.Id, cancel))
+            {
+                return Results.Problem("That guild name is taken.", statusCode: StatusCodes.Status409Conflict);
+            }
+
+            guild.Name = newName;
+            guild.NormalizedName = normalized;
+        }
+
+        if (tagChanges)
+        {
+            guild.Tag = newTag!.ToUpperInvariant();
+        }
+
+        if (nameChanges || tagChanges)
+        {
+            guild.NameChangedUtc = now;
+        }
+
+        if (newDescription != null)
+        {
+            guild.Description = newDescription;
+        }
+
+        if (request?.IsOpen != null)
+        {
+            guild.IsOpen = request.IsOpen.Value;
+        }
+
+        if (request?.BannerStyle != null)
+        {
+            guild.BannerStyle = request.BannerStyle.Value;
+        }
+
+        try
+        {
+            await db.SaveChangesAsync(cancel);
+        }
+        catch (DbUpdateException)
+        {
+            return Results.Problem("That guild name is taken.", statusCode: StatusCodes.Status409Conflict);
+        }
+
+        int count = await db.GuildMembers.CountAsync(m => m.GuildId == guild.Id, cancel);
+        return Results.Ok(new GuildSummary(guild.Id, guild.Name, guild.Tag, guild.Description, guild.IsOpen, count));
+    }
+
+    // ------------------------------------------------------------------ guild war
+
+    private static async Task<IResult> War(ClaimsPrincipal principal, AppDbContext db, CancellationToken cancel)
+    {
+        if (!SocialEndpoints.TryGetUserId(principal, out Guid me)) return Results.Unauthorized();
+
+        GuildMember? membership = await FindMembership(db, me, cancel);
+
+        if (membership == null)
+        {
+            return Results.Problem("You aren't in a guild.", statusCode: StatusCodes.Status403Forbidden);
+        }
+
+        return Results.Ok(await GuildWars.Describe(db, membership.GuildId, DateTime.UtcNow, cancel));
     }
 
     // ------------------------------------------------------------------ joining / leaving

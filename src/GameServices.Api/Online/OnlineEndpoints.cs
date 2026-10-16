@@ -12,7 +12,7 @@ public record CreateRoomRequest(string? Name, bool GuildMatch);
 
 public record DeckRequest(List<string>? Main, List<string>? Extra);
 
-public record GuildRankDto(int Rank, Guid GuildId, string Name, string Tag, int Rating, int Wins, int Losses, int Draws, int Members);
+public record GuildRankDto(int Rank, Guid GuildId, string Name, string Tag, int Rating, int Wins, int Losses, int Draws, int Members, int Tier = 0, string TierName = "Rookie", int WarWins = 0, int BannerStyle = 0);
 
 public record GuildLeaderboard(List<GuildRankDto> Items, int MyRank, Guid MyGuildId);
 
@@ -232,7 +232,7 @@ public static partial class OnlineEndpoints
         var rows = await db.Guilds.AsNoTracking()
             .Select(g => new
             {
-                g.Id, g.Name, g.Tag, g.Rating, g.Wins, g.Losses, g.Draws,
+                g.Id, g.Name, g.Tag, g.Rating, g.Wins, g.Losses, g.Draws, g.WarWins, g.BannerStyle,
                 Members = db.GuildMembers.Count(m => m.GuildId == g.Id)
             })
             .ToListAsync(cancel);
@@ -240,7 +240,8 @@ public static partial class OnlineEndpoints
         // Best first: rating, then wins, then fewer losses, then name (so the order never jumps around).
         var ranked = rows
             .OrderByDescending(g => g.Rating).ThenByDescending(g => g.Wins).ThenBy(g => g.Losses).ThenBy(g => g.Name, StringComparer.OrdinalIgnoreCase)
-            .Select((g, i) => new GuildRankDto(i + 1, g.Id, g.Name, g.Tag, g.Rating, g.Wins, g.Losses, g.Draws, g.Members))
+            .Select((g, i) => new GuildRankDto(i + 1, g.Id, g.Name, g.Tag, g.Rating, g.Wins, g.Losses, g.Draws, g.Members,
+                GameServices.Api.Guilds.GuildTiers.TierOf(g.Rating, g.WarWins), GameServices.Api.Guilds.GuildTiers.NameOf(GameServices.Api.Guilds.GuildTiers.TierOf(g.Rating, g.WarWins)), g.WarWins, g.BannerStyle))
             .ToList();
 
         Guid myGuild = await db.GuildMembers.AsNoTracking().Where(m => m.UserId == me).Select(m => m.GuildId).FirstOrDefaultAsync(cancel);

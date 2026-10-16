@@ -660,13 +660,14 @@ public class OnlineTests : IClassFixture<OnlineFactory>
         RewardsMessage rewardsA = JsonSerializer.Deserialize<RewardsMessage>((await phoneA.WaitAsync(MessageTypes.Rewards)).Json, Wire.Options)!;
         RewardsMessage rewardsB = JsonSerializer.Deserialize<RewardsMessage>((await phoneB.WaitAsync(MessageTypes.Rewards)).Json, Wire.Options)!;
 
-        Assert.Equal(EconomyEndpoints.WinReward, rewardsA.Awarded);
-        Assert.Equal(EconomyEndpoints.LossReward, rewardsB.Awarded);
-        Assert.Equal(900 + EconomyEndpoints.WinReward, rewardsA.DuelPoints);
-        Assert.Equal(900 + EconomyEndpoints.LossReward, rewardsB.DuelPoints);
+        // Online duels pay no Duel Points at all (single-player opponents do, once per Prestige rank).
+        Assert.Equal(0, rewardsA.Awarded);
+        Assert.Equal(0, rewardsB.Awarded);
+        Assert.Equal(900, rewardsA.DuelPoints);
+        Assert.Equal(900, rewardsB.DuelPoints);
 
-        // The wallet really changed, and the history shows it.
-        Assert.Equal(900 + EconomyEndpoints.WinReward, (await a.Http.GetFromJsonAsync<ProfileResponse>("/api/card-game/profile", Wire.Options))!.DuelPoints);
+        // The wallet did not change, but the history shows the duel.
+        Assert.Equal(900, (await a.Http.GetFromJsonAsync<ProfileResponse>("/api/card-game/profile", Wire.Options))!.DuelPoints);
 
         List<MatchHistoryDto> historyB = (await b.Http.GetFromJsonAsync<List<MatchHistoryDto>>("/api/matches/mine", Wire.Options))!;
         MatchHistoryDto line = Assert.Single(historyB);

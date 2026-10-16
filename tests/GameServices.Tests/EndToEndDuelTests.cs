@@ -392,8 +392,8 @@ public class EndToEndDuelTests
 
             if (turns >= MatchResults.MinTurnsForRewards)
             {
-                Assert.Equal(winner == 0 ? EconomyEndpoints.WinReward : winner == 1 ? EconomyEndpoints.LossReward : EconomyEndpoints.LossReward, paidA);
-                Assert.Equal(winner == 1 ? EconomyEndpoints.WinReward : EconomyEndpoints.LossReward, paidB);
+                Assert.Equal(0, paidA);   // online duels pay no Duel Points
+                Assert.Equal(0, paidB);
             }
 
             // The wallet and the history agree.

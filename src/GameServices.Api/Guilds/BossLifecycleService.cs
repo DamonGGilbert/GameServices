@@ -28,6 +28,14 @@ public class BossLifecycleService(IServiceScopeFactory scopes, ILogger<BossLifec
 
                     int closed = await RunOnce(db, DateTime.UtcNow, stopping);
 
+                    // Guild wars start and end on weekends: the same once-a-minute job takes care of them.
+                    int wars = await GuildWars.RunOnce(db, DateTime.UtcNow, stopping);
+
+                    if (wars > 0)
+                    {
+                        logger.LogInformation("Guild wars changed: {Count}.", wars);
+                    }
+
                     if (closed > 0)
                     {
                         logger.LogInformation("Closed {Count} expired guild boss(es).", closed);

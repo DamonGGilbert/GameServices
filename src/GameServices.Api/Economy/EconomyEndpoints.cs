@@ -8,15 +8,24 @@ namespace GameServices.Api.Economy;
 
 public record OwnedCardDto(string CardId, int Quantity);
 
-public record ProfileResponse(int DuelPoints, int Version, int RewardsLeftToday, List<OwnedCardDto> Collection);
+public record OpponentClaimDto(string OpponentId, int Prestige, DateTime LastClaimUtc);
+
+public record ProfileResponse(int DuelPoints, int Version, int RewardsLeftToday, List<OwnedCardDto> Collection, int SpinTickets = 0, List<OpponentClaimDto>? Claims = null);
 
 public record PackInfo(string Id, string Name, int Price, int CardCount);
 
 public record OpenPackResponse(string PackId, int Spent, int DuelPoints, List<string> Cards);
 
-public record DuelResultRequest(string Result);
+/// <summary>OpponentId and Prestige say WHICH single-player opponent was beaten and at which Prestige rank (see RewardRules).</summary>
+public record DuelResultRequest(string Result, string? OpponentId = null, int Prestige = 0);
 
-public record RewardResponse(int Awarded, int DuelPoints, int RewardsLeftToday);
+public record RewardResponse(int Awarded, int DuelPoints, int RewardsLeftToday, string Note = "");
+
+public record TicketClaimRequest(string Kind, int Prestige);
+
+public record TicketClaimResponse(bool Granted, int SpinTickets);
+
+public record LuckyDrawResponse(string SetId, string SetName, int SpinTickets, List<string> Cards);
 
 public record LedgerLine(string Kind, string Detail, int Amount, int BalanceAfter, DateTime CreatedUtc);
 
@@ -32,7 +41,9 @@ public record LedgerLine(string Kind, string Detail, int Amount, int BalanceAfte
 public static class EconomyEndpoints
 {
     public const int WinReward = 300;
-    public const int LossReward = 75;
+
+    /// <summary>Only a WIN pays Duel Points now (and only when RewardRules says the opponent is ready to pay).</summary>
+    public const int LossReward = 0;
 
     // A real duel takes minutes. These caps stop a hacked client from spamming "I won!".
     public static readonly TimeSpan MinTimeBetweenRewards = TimeSpan.FromSeconds(45);
@@ -48,6 +59,8 @@ public static class EconomyEndpoints
         group.MapGet("/packs", () => Results.Ok(Packs.All.Select(p => new PackInfo(p.Id, p.Name, p.Price, p.CardCount))));
         group.MapPost("/packs/{packId}/open", OpenPack);
         group.MapPost("/duels/reward", ClaimDuelReward);
+        group.MapPost("/tickets/claim", ClaimTicket);
+        group.MapPost("/lucky-draw", LuckyDraw);
         group.MapGet("/ledger", GetLedger);
 
         return app;
@@ -71,7 +84,12 @@ public static class EconomyEndpoints
             .Select(c => new OwnedCardDto(c.CardId, c.Quantity))
             .ToListAsync(cancel);
 
-        return new ProfileResponse(profile.DuelPoints, profile.Version, RewardsLeft(profile, DateTime.UtcNow), collection);
+        List<OpponentClaimDto> claims = await db.OpponentRewards.AsNoTracking()
+            .Where(r => r.UserId == profile.UserId)
+            .Select(r => new OpponentClaimDto(r.OpponentId, r.Prestige, r.LastClaimUtc))
+            .ToListAsync(cancel);
+
+        return new ProfileResponse(profile.DuelPoints, profile.Version, RewardsLeft(profile, DateTime.UtcNow), collection, profile.SpinTickets, claims);
     }
 
     /// <summary>First visit: create the wallet and hand over the starter deck (written in the ledger).</summary>
@@ -187,7 +205,7 @@ public static class EconomyEndpoints
             return Results.ValidationProblem(new Dictionary<string, string[]> { ["result"] = new[] { "Result must be win, loss or draw." } });
         }
 
-        PayResult paid = await PayDuelReward(db, catalog, userId, result, cancel);
+        PayResult paid = await PaySinglePlayerReward(db, catalog, userId, result, request!.OpponentId, request.Prestige, cancel);
 
         return paid.Reward != null
             ? Results.Ok(paid.Reward)
@@ -197,15 +215,33 @@ public static class EconomyEndpoints
     public record PayResult(RewardResponse? Reward, string? Problem, int Status);
 
     /// <summary>
-    /// Pays the duel reward for "win", "loss" or "draw". The amount is decided HERE, never by the game, and the
-    /// same limits apply whether the game claims a single-player reward or the server pays for an online duel.
+    /// Pays the reward for beating a single-player opponent. The amount is decided HERE, never by the game: only a win
+    /// pays, only when RewardRules says that opponent is ready, and the usual speed and daily limits apply on top.
+    /// (Online duels pay nothing.)
     /// </summary>
-    public static async Task<PayResult> PayDuelReward(AppDbContext db, CardCatalog catalog, Guid userId, string result, CancellationToken cancel)
+    public static async Task<PayResult> PaySinglePlayerReward(AppDbContext db, CardCatalog catalog, Guid userId, string result, string? opponentId, int prestige, CancellationToken cancel)
     {
-        int amount = result == "win" ? WinReward : LossReward;
-
         CardGameProfile profile = await GetOrCreateProfile(db, catalog, userId, cancel);
         DateTime now = DateTime.UtcNow;
+
+        if (result != "win")
+        {
+            return new PayResult(new RewardResponse(0, profile.DuelPoints, RewardsLeft(profile, now), "Only a win earns Duel Points."), null, 200);
+        }
+
+        if (string.IsNullOrWhiteSpace(opponentId) || opponentId.Length > 64 || prestige < 0 || prestige > RewardRules.MaxPrestige)
+        {
+            return new PayResult(null, "Say which opponent you beat, and your Prestige rank.", StatusCodes.Status400BadRequest);
+        }
+
+        OpponentReward? claim = await db.OpponentRewards.FirstOrDefaultAsync(r => r.UserId == userId && r.OpponentId == opponentId, cancel);
+
+        if (!RewardRules.IsEligible(claim, prestige, now, out string note))
+        {
+            return new PayResult(new RewardResponse(0, profile.DuelPoints, RewardsLeft(profile, now), note), null, 200);
+        }
+
+        int amount = WinReward;
 
         if (profile.LastRewardUtc != null && now - profile.LastRewardUtc.Value < MinTimeBetweenRewards)
         {
@@ -230,7 +266,17 @@ public static class EconomyEndpoints
         profile.DuelPoints += amount;
         profile.Version += 1;
 
-        db.Ledger.Add(new LedgerEntry { UserId = userId, Kind = "duel-" + result, Detail = "Duel reward", Amount = amount, BalanceAfter = profile.DuelPoints });
+        if (claim == null)
+        {
+            db.OpponentRewards.Add(new OpponentReward { UserId = userId, OpponentId = opponentId, Prestige = prestige, LastClaimUtc = now });
+        }
+        else
+        {
+            claim.Prestige = prestige;
+            claim.LastClaimUtc = now;
+        }
+
+        db.Ledger.Add(new LedgerEntry { UserId = userId, Kind = "duel-win", Detail = "Beat " + opponentId + " (Prestige " + prestige + ")", Amount = amount, BalanceAfter = profile.DuelPoints });
 
         try
         {
@@ -242,6 +288,93 @@ public static class EconomyEndpoints
         }
 
         return new PayResult(new RewardResponse(amount, profile.DuelPoints, RewardsLeft(profile, now)), null, 200);
+    }
+
+    // ------------------------------------------------------------------ Lucky Draw tickets
+
+    private static async Task<IResult> ClaimTicket(TicketClaimRequest request, ClaimsPrincipal principal, AppDbContext db, CardCatalog catalog, CancellationToken cancel)
+    {
+        if (!TryGetUserId(principal, out Guid userId)) return Results.Unauthorized();
+
+        if (request == null || !Tickets.TryMakeReason(request.Kind, request.Prestige, out string reason))
+        {
+            return Results.ValidationProblem(new Dictionary<string, string[]> { ["kind"] = new[] { "Kind must be final-opponent or prestige, with a Prestige rank." } });
+        }
+
+        CardGameProfile profile = await GetOrCreateProfile(db, catalog, userId, cancel);
+
+        DateTime? last = await db.TicketGrants.AsNoTracking().Where(g => g.UserId == userId).OrderByDescending(g => g.CreatedUtc).Select(g => (DateTime?)g.CreatedUtc).FirstOrDefaultAsync(cancel);
+
+        if (last != null && DateTime.UtcNow - last.Value < Tickets.MinTimeBetweenClaims)
+        {
+            return Results.Problem("That was too soon after your last ticket.", statusCode: StatusCodes.Status429TooManyRequests);
+        }
+
+        bool granted = await Tickets.GrantAsync(db, userId, reason, cancel);
+
+        try
+        {
+            await db.SaveChangesAsync(cancel);
+        }
+        catch (DbUpdateException)
+        {
+            return Results.Problem("Your wallet changed while this was being processed. Please try again.", statusCode: StatusCodes.Status409Conflict);
+        }
+
+        return Results.Ok(new TicketClaimResponse(granted, profile.SpinTickets));
+    }
+
+    /// <summary>Spends one ticket: the server picks an official set at random and opens a free pack of it.</summary>
+    private static async Task<IResult> LuckyDraw(ClaimsPrincipal principal, AppDbContext db, CardCatalog catalog, CancellationToken cancel)
+    {
+        if (!TryGetUserId(principal, out Guid userId)) return Results.Unauthorized();
+
+        CardGameProfile profile = await GetOrCreateProfile(db, catalog, userId, cancel);
+
+        if (profile.SpinTickets <= 0)
+        {
+            return Results.Problem("You have no Lucky Draw tickets.", statusCode: StatusCodes.Status400BadRequest);
+        }
+
+        if (catalog.Sets.Count == 0)
+        {
+            return Results.Problem("There are no official packs to draw yet.", statusCode: StatusCodes.Status503ServiceUnavailable);
+        }
+
+        CatalogSet set = catalog.Sets[Random.Shared.Next(catalog.Sets.Count)];
+        List<string> cards = Packs.RollOfficial(set, catalog, Random.Shared);
+
+        profile.SpinTickets -= 1;
+        profile.Version += 1;
+
+        Dictionary<string, OwnedCard> owned = await db.OwnedCards.Where(c => c.UserId == userId).ToDictionaryAsync(c => c.CardId, cancel);
+
+        foreach (string cardId in cards)
+        {
+            if (owned.TryGetValue(cardId, out OwnedCard? row))
+            {
+                row.Quantity += 1;
+            }
+            else
+            {
+                row = new OwnedCard { UserId = userId, CardId = cardId, Quantity = 1 };
+                owned[cardId] = row;
+                db.OwnedCards.Add(row);
+            }
+        }
+
+        db.Ledger.Add(new LedgerEntry { UserId = userId, Kind = "lucky-draw", Detail = "Lucky Draw: " + set.Name, Amount = 0, BalanceAfter = profile.DuelPoints });
+
+        try
+        {
+            await db.SaveChangesAsync(cancel);
+        }
+        catch (DbUpdateException)
+        {
+            return Results.Problem("Your wallet changed while this was being processed. Please try again.", statusCode: StatusCodes.Status409Conflict);
+        }
+
+        return Results.Ok(new LuckyDrawResponse(set.Id, set.Name, profile.SpinTickets, cards));
     }
 
     // ------------------------------------------------------------------ ledger

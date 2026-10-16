@@ -19,10 +19,13 @@ public record PackDefinition(string Id, string Name, int Price, PackFilter Filte
 public static class Packs
 {
     private static readonly RarityOdds[] Commons = { new("C", 100) };
-    private static readonly RarityOdds[] Premium = { new("UN", 60), new("R", 25), new("SR", 9), new("UR", 4.5), new("SCR", 1.5) };
-    private static readonly RarityOdds[] Mixed = { new("C", 85), new("UN", 15) };
-    private static readonly RarityOdds[] Upper = { new("UN", 50), new("R", 35), new("SR", 12), new("UR", 3) };
-    private static readonly RarityOdds[] Foil = { new("R", 50), new("SR", 30), new("UR", 15), new("SCR", 5) };
+    private static readonly RarityOdds[] Premium = { new("UN", 64), new("R", 24), new("SR", 8), new("UR", 3.2), new("SCR", 0.8) };
+    private static readonly RarityOdds[] Mixed = { new("C", 88), new("UN", 12) };
+    private static readonly RarityOdds[] Upper = { new("UN", 55), new("R", 33), new("SR", 9.5), new("UR", 2.5) };
+    private static readonly RarityOdds[] Foil = { new("R", 56), new("SR", 29), new("UR", 12.5), new("SCR", 2.5) };
+
+    // The official set packs of the Lucky Draw: 9 cards like the real boosters.
+    private static readonly RarityOdds[] OfficialRare = { new("R", 62), new("SR", 25), new("UR", 11), new("SCR", 2) };
 
     public static readonly IReadOnlyList<PackDefinition> All = new[]
     {
@@ -42,13 +45,15 @@ public static class Packs
             new PackSlot("Common slot", 6, Mixed),
             new PackSlot("Premium slot", 2, Upper),
             new PackSlot("Foil slot", 1, Foil)
-        }),
-        new PackDefinition("secret-vault", "SECRET VAULT", 1200, PackFilter.All, new[]
-        {
-            new PackSlot("Rare+ slot", 3, new RarityOdds[] { new("R", 50), new("SR", 40), new("UR", 10) }),
-            new PackSlot("Super+ slot", 1, new RarityOdds[] { new("SR", 55), new("UR", 35), new("SCR", 10) }),
-            new PackSlot("Ultra+ slot", 1, new RarityOdds[] { new("UR", 60), new("SCR", 40) })
         })
+    };
+
+    /// <summary>The slots of an official set pack (Lucky Draw prize).</summary>
+    public static readonly PackSlot[] OfficialSlots =
+    {
+        new PackSlot("Common slot", 7, Commons),
+        new PackSlot("Premium slot", 1, Premium),
+        new PackSlot("Rare slot", 1, OfficialRare)
     };
 
     public static PackDefinition? Find(string id) => All.FirstOrDefault(p => p.Id == id);
@@ -63,9 +68,21 @@ public static class Packs
             _ => true
         }).ToList();
 
+        return RollSlots(pack.Slots, eligible, random);
+    }
+
+    /// <summary>Rolls an official set pack from the cards of that set only.</summary>
+    public static List<string> RollOfficial(CatalogSet set, CardCatalog catalog, Random random)
+    {
+        List<CatalogCard> eligible = set.Cards.Select(catalog.Find).Where(c => c != null).Select(c => c!).ToList();
+        return RollSlots(OfficialSlots, eligible, random);
+    }
+
+    private static List<string> RollSlots(PackSlot[] slots, List<CatalogCard> eligible, Random random)
+    {
         List<string> result = new();
 
-        foreach (PackSlot slot in pack.Slots)
+        foreach (PackSlot slot in slots)
         {
             for (int i = 0; i < slot.Quantity; i++)
             {

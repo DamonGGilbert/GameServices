@@ -114,6 +114,33 @@ public class CardGameProfile
     public DateTime? LastRewardUtc { get; set; }
     public int RewardDay { get; set; }
     public int RewardsToday { get; set; }
+
+    /// <summary>Lucky Draw tickets. Earned (never bought): see Tickets.</summary>
+    public int SpinTickets { get; set; }
+}
+
+/// <summary>
+/// When this player last got Duel Points for beating a single-player opponent, and at which Prestige rank. An opponent
+/// pays once per Prestige rank; from the top ranks on it pays once every 24 hours instead (see RewardRules).
+/// </summary>
+public class OpponentReward
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid UserId { get; set; }
+    public string OpponentId { get; set; } = "";
+    public int Prestige { get; set; }
+    public DateTime LastClaimUtc { get; set; } = DateTime.UtcNow;
+}
+
+/// <summary>One Lucky Draw ticket that was handed out, and why. (UserId, Reason) is unique: every reason pays once.</summary>
+public class TicketGrant
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid UserId { get; set; }
+
+    /// <summary>"final-2" (beat the final opponent at Prestige 2), "prestige-3", "war-&lt;id&gt;" ...</summary>
+    public string Reason { get; set; } = "";
+    public DateTime CreatedUtc { get; set; } = DateTime.UtcNow;
 }
 
 /// <summary>"You own 3 copies of card 246."</summary>
@@ -205,6 +232,9 @@ public class Guild
     /// <summary>Open guilds can be joined by anyone. Closed ones need an invite from an officer.</summary>
     public bool IsOpen { get; set; } = true;
 
+    /// <summary>When the leader last changed the name or tag (null = never). Changes are limited to one every 14 days.</summary>
+    public DateTime? NameChangedUtc { get; set; }
+
     public DateTime CreatedUtc { get; set; } = DateTime.UtcNow;
 
     // How the guild does in Guild Matches (duels against another guild). The leaderboard ranks by Rating.
@@ -212,6 +242,42 @@ public class Guild
     public int Wins { get; set; }
     public int Losses { get; set; }
     public int Draws { get; set; }
+
+    // Guild Wars (the weekend event): wars won and lost. Wins also count towards the guild's tier.
+    public int WarWins { get; set; }
+    public int WarLosses { get; set; }
+
+    /// <summary>The banner style the leader picked (0 = plain ... 4 = the shiniest). Limited by the guild's tier.</summary>
+    public int BannerStyle { get; set; }
+}
+
+public enum WarStatus { Active = 0, Finished = 1 }
+
+/// <summary>One weekend war between two guilds.</summary>
+public class GuildWar
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid GuildAId { get; set; }
+    public Guid GuildBId { get; set; }
+    public DateTime StartsUtc { get; set; }
+    public DateTime EndsUtc { get; set; }
+    public WarStatus Status { get; set; } = WarStatus.Active;
+    public int ScoreA { get; set; }
+    public int ScoreB { get; set; }
+
+    /// <summary>The winning guild, or null for a draw / while the war is still on.</summary>
+    public Guid? WinnerGuildId { get; set; }
+}
+
+/// <summary>A player's one war duel (their first Guild Match against the other guild during the war).</summary>
+public class GuildWarDuel
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid WarId { get; set; }
+    public Guid UserId { get; set; }
+    public Guid GuildId { get; set; }
+    public bool Won { get; set; }
+    public DateTime PlayedUtc { get; set; } = DateTime.UtcNow;
 }
 
 /// <summary>One finished online duel (history).</summary>
@@ -326,6 +392,19 @@ public class PasswordResetCode
 public class UserAvatar
 {
     public Guid UserId { get; set; }
+    public byte[] Data { get; set; } = Array.Empty<byte>();
+    public string ContentType { get; set; } = "image/jpeg";
+    public DateTime UpdatedUtc { get; set; } = DateTime.UtcNow;
+}
+
+/// <summary>A playmat or sleeve picture a player chose themselves (see CosmeticImageEndpoints for who can see it).</summary>
+public class UserCosmeticImage
+{
+    public Guid UserId { get; set; }
+
+    /// <summary>0 = playmat, 1 = sleeve.</summary>
+    public int Kind { get; set; }
+
     public byte[] Data { get; set; } = Array.Empty<byte>();
     public string ContentType { get; set; } = "image/jpeg";
     public DateTime UpdatedUtc { get; set; } = DateTime.UtcNow;

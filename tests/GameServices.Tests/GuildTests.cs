@@ -69,6 +69,78 @@ public class GuildTests : IClassFixture<ApiFactory>
         return (leader, officer, member, guild);
     }
 
+    // ------------------------------------------------------------------ editing the guild's details
+
+    private static Task<HttpResponseMessage> Edit(Player by, UpdateGuildRequest body)
+        => by.Http.PutAsJsonAsync("/api/guilds/details", body);
+
+    [Fact]
+    public async Task The_leader_can_change_the_description_and_open_setting_any_time()
+    {
+        Player leader = await NewPlayer();
+        await MakeGuild(leader);
+
+        Assert.Equal(HttpStatusCode.OK, (await Edit(leader, new UpdateGuildRequest(null, null, "New words", false))).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Edit(leader, new UpdateGuildRequest(null, null, "Newer words", true))).StatusCode);
+
+        GuildDetail detail = await Mine(leader);
+        Assert.Equal("Newer words", detail.Description);
+        Assert.True(detail.IsOpen);
+        Assert.Null(detail.NextNameChangeUtc);
+    }
+
+    [Fact]
+    public async Task Only_the_leader_can_edit_the_guild()
+    {
+        (Player leader, Player officer, Player member, _) = await FullGuild();
+
+        Assert.Equal(HttpStatusCode.Forbidden, (await Edit(officer, new UpdateGuildRequest(null, null, "x", null))).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await Edit(member, new UpdateGuildRequest(null, null, "x", null))).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Edit(leader, new UpdateGuildRequest(null, null, "x", null))).StatusCode);
+    }
+
+    [Fact]
+    public async Task The_name_and_tag_can_only_be_changed_every_14_days()
+    {
+        Player leader = await NewPlayer();
+        await MakeGuild(leader);
+
+        Assert.Equal(HttpStatusCode.OK, (await Edit(leader, new UpdateGuildRequest(UniqueName(), "NEW", null, null))).StatusCode);
+
+        GuildDetail detail = await Mine(leader);
+        Assert.Equal("NEW", detail.Tag);
+        Assert.NotNull(detail.NextNameChangeUtc);
+
+        // A second change straight away is refused ...
+        Assert.Equal(HttpStatusCode.TooManyRequests, (await Edit(leader, new UpdateGuildRequest(UniqueName(), null, null, null))).StatusCode);
+
+        // ... but the description is still free to change.
+        Assert.Equal(HttpStatusCode.OK, (await Edit(leader, new UpdateGuildRequest(null, null, "still fine", null))).StatusCode);
+
+        // 14 days later it works again.
+        using (IServiceScope scope = factory.Services.CreateScope())
+        {
+            AppDbContext db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            await db.Guilds.Where(g => g.Id == detail.Id).ExecuteUpdateAsync(u => u.SetProperty(g => g.NameChangedUtc, DateTime.UtcNow.AddDays(-15)));
+        }
+
+        Assert.Equal(HttpStatusCode.OK, (await Edit(leader, new UpdateGuildRequest(UniqueName(), null, null, null))).StatusCode);
+    }
+
+    [Fact]
+    public async Task Edited_names_are_checked_for_shape_and_uniqueness()
+    {
+        Player first = await NewPlayer();
+        Player second = await NewPlayer();
+        GuildSummary taken = await MakeGuild(first);
+        await MakeGuild(second);
+
+        Assert.Equal(HttpStatusCode.Conflict, (await Edit(second, new UpdateGuildRequest(taken.Name.ToUpperInvariant(), null, null, null))).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await Edit(second, new UpdateGuildRequest("x", null, null, null))).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await Edit(second, new UpdateGuildRequest(null, "TOOLONG", null, null))).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await Edit(second, new UpdateGuildRequest(null, null, new string('a', 141), null))).StatusCode);
+    }
+
     // ------------------------------------------------------------------ line-up (5 main + 3 bench)
 
     private static Task<HttpResponseMessage> SetSlot(Player by, Guid userId, int slot)

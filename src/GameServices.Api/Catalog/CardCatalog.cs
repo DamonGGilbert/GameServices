@@ -10,6 +10,9 @@ public record CatalogCard(string Id, string Name, string Rarity, int Category, i
 
 public record StarterEntry(string Id, int Qty);
 
+/// <summary>An official set (Legend of Blue Eyes White Dragon ...) and the ids of the cards in it.</summary>
+public record CatalogSet(string Id, string Name, List<string> Cards);
+
 /// <summary>
 /// The server's own list of every card that exists, and which rarity each one is.
 /// It is exported from the Unity project (Unity menu: Tools > Server > Export Catalog) into
@@ -23,6 +26,7 @@ public class CardCatalog
         public int StarterDuelPoints { get; set; }
         public List<CatalogCard> Cards { get; set; } = new();
         public List<StarterEntry> StarterDeck { get; set; } = new();
+        public List<CatalogSet> Sets { get; set; } = new();
     }
 
     private readonly Dictionary<string, CatalogCard> byId;
@@ -31,13 +35,23 @@ public class CardCatalog
     public IReadOnlyList<CatalogCard> Cards { get; }
     public IReadOnlyList<StarterEntry> StarterDeck { get; }
 
-    public CardCatalog(int starterDuelPoints, IReadOnlyList<CatalogCard> cards, IReadOnlyList<StarterEntry> starterDeck)
+    /// <summary>The official sets the Lucky Draw can pick. Only the cards that really exist in the catalog are kept.</summary>
+    public IReadOnlyList<CatalogSet> Sets { get; }
+
+    public CardCatalog(int starterDuelPoints, IReadOnlyList<CatalogCard> cards, IReadOnlyList<StarterEntry> starterDeck, IReadOnlyList<CatalogSet>? sets = null)
     {
         StarterDuelPoints = starterDuelPoints;
         Cards = cards;
         StarterDeck = starterDeck;
         byId = cards.ToDictionary(c => c.Id);
+
+        Sets = (sets ?? Array.Empty<CatalogSet>())
+            .Select(s => new CatalogSet(s.Id, s.Name, s.Cards.Where(byId.ContainsKey).Distinct().ToList()))
+            .Where(s => s.Cards.Count > 0)
+            .ToList();
     }
+
+    public CatalogSet? FindSet(string setId) => Sets.FirstOrDefault(s => s.Id == setId);
 
     public bool Exists(string cardId) => byId.ContainsKey(cardId);
 
@@ -53,6 +67,6 @@ public class CardCatalog
             throw new InvalidOperationException("Catalog has no cards. Export it from Unity first.");
         }
 
-        return new CardCatalog(shape.StarterDuelPoints, shape.Cards, shape.StarterDeck);
+        return new CardCatalog(shape.StarterDuelPoints, shape.Cards, shape.StarterDeck, shape.Sets);
     }
 }

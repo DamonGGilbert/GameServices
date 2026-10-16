@@ -25,6 +25,8 @@ public class AppDbContext : DbContext
     public DbSet<CardGameProfile> CardGameProfiles => Set<CardGameProfile>();
     public DbSet<OwnedCard> OwnedCards => Set<OwnedCard>();
     public DbSet<LedgerEntry> Ledger => Set<LedgerEntry>();
+    public DbSet<OpponentReward> OpponentRewards => Set<OpponentReward>();
+    public DbSet<TicketGrant> TicketGrants => Set<TicketGrant>();
     public DbSet<Friendship> Friendships => Set<Friendship>();
     public DbSet<UserBlock> Blocks => Set<UserBlock>();
     public DbSet<ChatMessage> ChatMessages => Set<ChatMessage>();
@@ -34,9 +36,12 @@ public class AppDbContext : DbContext
     public DbSet<GuildInvite> GuildInvites => Set<GuildInvite>();
     public DbSet<GuildMessage> GuildMessages => Set<GuildMessage>();
     public DbSet<GuildBoss> GuildBosses => Set<GuildBoss>();
+    public DbSet<GuildWar> GuildWars => Set<GuildWar>();
+    public DbSet<GuildWarDuel> GuildWarDuels => Set<GuildWarDuel>();
     public DbSet<BossContribution> BossContributions => Set<BossContribution>();
     public DbSet<PasswordResetCode> PasswordResetCodes => Set<PasswordResetCode>();
     public DbSet<UserAvatar> Avatars => Set<UserAvatar>();
+    public DbSet<UserCosmeticImage> CosmeticImages => Set<UserCosmeticImage>();
 
     // SQLite doesn't remember that a date is UTC, so we put the "UTC" label back
     // whenever we read one. Otherwise clients would see dates without the trailing Z.
@@ -101,6 +106,22 @@ public class AppDbContext : DbContext
             card.HasOne<User>().WithMany().HasForeignKey(c => c.UserId).OnDelete(DeleteBehavior.Cascade);
         });
 
+        model.Entity<OpponentReward>(row =>
+        {
+            row.HasKey(r => r.Id);
+            row.Property(r => r.OpponentId).HasMaxLength(64).IsRequired();
+            row.HasIndex(r => new { r.UserId, r.OpponentId }).IsUnique();
+            row.HasOne<User>().WithMany().HasForeignKey(r => r.UserId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        model.Entity<TicketGrant>(grant =>
+        {
+            grant.HasKey(g => g.Id);
+            grant.Property(g => g.Reason).HasMaxLength(64).IsRequired();
+            grant.HasIndex(g => new { g.UserId, g.Reason }).IsUnique();
+            grant.HasOne<User>().WithMany().HasForeignKey(g => g.UserId).OnDelete(DeleteBehavior.Cascade);
+        });
+
         model.Entity<LedgerEntry>(entry =>
         {
             entry.HasKey(e => e.Id);
@@ -143,6 +164,13 @@ public class AppDbContext : DbContext
             avatar.HasKey(a => a.UserId);
             avatar.Property(a => a.ContentType).HasMaxLength(20).IsRequired();
             avatar.HasOne<User>().WithMany().HasForeignKey(a => a.UserId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        model.Entity<UserCosmeticImage>(image =>
+        {
+            image.HasKey(i => new { i.UserId, i.Kind });
+            image.Property(i => i.ContentType).HasMaxLength(20).IsRequired();
+            image.HasOne<User>().WithMany().HasForeignKey(i => i.UserId).OnDelete(DeleteBehavior.Cascade);
         });
 
         model.Entity<DuelMatch>(match =>
@@ -208,6 +236,24 @@ public class AppDbContext : DbContext
             // A guild can only have ONE active boss at a time (status 0 = Active). A "partial" unique index.
             b.HasIndex(x => x.GuildId).IsUnique().HasFilter("\"Status\" = 0").HasDatabaseName("IX_GuildBosses_OneActivePerGuild");
             b.HasOne<Guild>().WithMany().HasForeignKey(x => x.GuildId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        model.Entity<GuildWar>(w =>
+        {
+            w.HasKey(x => x.Id);
+            w.HasIndex(x => new { x.GuildAId, x.StartsUtc });
+            w.HasIndex(x => new { x.GuildBId, x.StartsUtc });
+            w.HasOne<Guild>().WithMany().HasForeignKey(x => x.GuildAId).OnDelete(DeleteBehavior.Cascade);
+            w.HasOne<Guild>().WithMany().HasForeignKey(x => x.GuildBId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        model.Entity<GuildWarDuel>(d =>
+        {
+            d.HasKey(x => x.Id);
+
+            // One war duel per player per war, guaranteed by the database.
+            d.HasIndex(x => new { x.WarId, x.UserId }).IsUnique();
+            d.HasOne<GuildWar>().WithMany().HasForeignKey(x => x.WarId).OnDelete(DeleteBehavior.Cascade);
         });
 
         model.Entity<BossContribution>(c =>
