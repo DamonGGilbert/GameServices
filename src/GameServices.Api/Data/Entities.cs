@@ -449,6 +449,28 @@ public class WalkingProfile
 
     /// <summary>How many reports were clipped hard enough to look suspicious.</summary>
     public int FlaggedReports { get; set; }
+
+    /// <summary>Accepted steps carried towards the next monster-finding chance (one every 5,000 - see MonsterFinder).</summary>
+    public int EncounterSteps { get; set; }
+
+    // ---- The walking game's Glimmer (see Walking/Wallet) ----
+    public int Glimmer { get; set; }
+
+    /// <summary>Steps not yet turned into Glimmer (1 Glimmer per 100).</summary>
+    public int GlimmerStepRemainder { get; set; }
+
+    /// <summary>False until the first sync brought the phone's balance across.</summary>
+    public bool WalletStarted { get; set; }
+
+    /// <summary>Phone-earned Glimmer accepted today (UTC day), up to a daily allowance.</summary>
+    public string PhoneGlimmerDay { get; set; } = "";
+    public int PhoneGlimmerToday { get; set; }
+
+    public string PacksDay { get; set; } = "";
+    public int PacksToday { get; set; }
+
+    /// <summary>The monster this walker walks with (it can't be offered for).</summary>
+    public Guid? CompanionMonsterId { get; set; }
 }
 
 /// <summary>Accepted steps for one player on one day (the player's own calendar day, "yyyy-MM-dd").</summary>
@@ -544,4 +566,88 @@ public class GuildStepRace
 
     /// <summary>The winning guild, or null for a draw / while it is still running.</summary>
     public Guid? WinnerGuildId { get; set; }
+}
+
+/// <summary>
+/// One of a walker's monsters, made by the server (see Walking/Monsters). The server keeps what it rolled; the game
+/// builds every other detail (looks, personality, stats) from SpeciesId + Seed + RarityTier.
+/// </summary>
+public class WalkingMonster
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid OwnerId { get; set; }
+    public string SpeciesId { get; set; } = "";
+    public int RarityTier { get; set; }
+    public long Seed { get; set; }
+
+    /// <summary>Hidden potential 1-100 (from seed + rarity; stored so the server never has to work it out again).</summary>
+    public int Potential { get; set; }
+
+    /// <summary>Which version of the game's generation rules the seed is meant for.</summary>
+    public int RulesVersion { get; set; } = 1;
+
+    /// <summary>The Nth of its species ever found, by anyone ("#12 Emberling").</summary>
+    public int Serial { get; set; }
+
+    /// <summary>"starter" or "walk".</summary>
+    public string Source { get; set; } = "";
+    public string? BiomeId { get; set; }
+
+    /// <summary>The walker's own calendar day it was found ("yyyy-MM-dd") - for the one-find-a-day rule.</summary>
+    public string FoundDay { get; set; } = "";
+    public DateTime FoundUtc { get; set; } = DateTime.UtcNow;
+
+    /// <summary>False until the player has watched its reveal.</summary>
+    public bool Seen { get; set; }
+
+    // ---- What it's done with its walker (sent up by the game; travels with the monster to a new home) ----
+    public int Level { get; set; } = 1;
+    public int Experience { get; set; }
+    public int TrainedPower { get; set; }
+    public int TrainedGuard { get; set; }
+    public int TrainedTricks { get; set; }
+    public int TrainedWits { get; set; }
+    public int TrainingSteps { get; set; }
+
+    /// <summary>When it joined its current walker (offers need it to have settled in first).</summary>
+    public DateTime AcquiredUtc { get; set; } = DateTime.UtcNow;
+    public int TradeCount { get; set; }
+
+    /// <summary>Who it came from, if it found a new home through an offer.</summary>
+    public Guid? ArrivedFromUserId { get; set; }
+}
+
+/// <summary>How many of each species have ever been found (for serial numbers).</summary>
+public class MonsterSpeciesCount
+{
+    public string SpeciesId { get; set; } = "";
+    public int Found { get; set; }
+}
+
+/// <summary>One change to a walker's Glimmer, so every balance can be explained.</summary>
+public class WalkingLedgerEntry
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid UserId { get; set; }
+    public int Amount { get; set; }
+    public int BalanceAfter { get; set; }
+    public string Kind { get; set; } = "";
+    public string Detail { get; set; } = "";
+    public DateTime CreatedUtc { get; set; } = DateTime.UtcNow;
+}
+
+public enum OfferStatus { Pending = 0, Accepted = 1, Declined = 2, Cancelled = 3, Expired = 4 }
+
+/// <summary>An offer of Glimmer for a friend's monster (see Walking/Monsters/MonsterOffers). The Glimmer is held until it's answered.</summary>
+public class MonsterOffer
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid MonsterId { get; set; }
+    public Guid FromUserId { get; set; }
+    public Guid ToUserId { get; set; }
+    public int Price { get; set; }
+    public OfferStatus Status { get; set; } = OfferStatus.Pending;
+    public DateTime CreatedUtc { get; set; } = DateTime.UtcNow;
+    public DateTime ExpiresUtc { get; set; }
+    public DateTime? DecidedUtc { get; set; }
 }

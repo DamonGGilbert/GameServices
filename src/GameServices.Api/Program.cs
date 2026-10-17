@@ -24,6 +24,11 @@ builder.Services.AddHostedService<WalkingLifecycleService>();
 string catalogPath = builder.Configuration["Catalog:Path"] ?? Path.Combine(builder.Environment.ContentRootPath, "Catalog", "catalog.json");
 builder.Services.AddSingleton(CardCatalog.LoadFile(catalogPath));
 
+// The walking game's monsters (exported from Unity), and the rules for finding them by walking.
+string monsterCatalogPath = builder.Configuration["Monsters:CatalogPath"] ?? Path.Combine(builder.Environment.ContentRootPath, "Walking", "monster-catalog.json");
+builder.Services.AddSingleton(GameServices.Api.Walking.Monsters.MonsterCatalog.LoadFile(monsterCatalogPath));
+builder.Services.AddSingleton<GameServices.Api.Walking.Monsters.MonsterFinder>();
+
 var app = builder.Build();
 
 // Bring the database up to date. A "migration" is a small, versioned script that changes the

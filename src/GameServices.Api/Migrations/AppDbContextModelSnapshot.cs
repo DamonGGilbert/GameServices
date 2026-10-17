@@ -658,6 +658,61 @@ namespace GameServices.Api.Migrations
                     b.ToTable("Ledger");
                 });
 
+            modelBuilder.Entity("GameServices.Api.Data.MonsterOffer", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("DecidedUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("ExpiresUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("FromUserId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("MonsterId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Price")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("ToUserId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FromUserId", "Status");
+
+                    b.HasIndex("MonsterId", "Status");
+
+                    b.HasIndex("ToUserId", "Status");
+
+                    b.ToTable("MonsterOffers");
+                });
+
+            modelBuilder.Entity("GameServices.Api.Data.MonsterSpeciesCount", b =>
+                {
+                    b.Property<string>("SpeciesId")
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Found")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("SpeciesId");
+
+                    b.ToTable("MonsterSpeciesCounts");
+                });
+
             modelBuilder.Entity("GameServices.Api.Data.OpponentReward", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1068,18 +1123,168 @@ namespace GameServices.Api.Migrations
                     b.ToTable("WalkingDays");
                 });
 
+            modelBuilder.Entity("GameServices.Api.Data.WalkingLedgerEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Amount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("BalanceAfter")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("CreatedUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Detail")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "CreatedUtc");
+
+                    b.ToTable("WalkingLedger");
+                });
+
+            modelBuilder.Entity("GameServices.Api.Data.WalkingMonster", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("AcquiredUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("ArrivedFromUserId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("BiomeId")
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Experience")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("FoundDay")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("FoundUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Level")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("OwnerId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Potential")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("RarityTier")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("RulesVersion")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("Seed")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("Seen")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Serial")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SpeciesId")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("TradeCount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("TrainedGuard")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("TrainedPower")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("TrainedTricks")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("TrainedWits")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("TrainingSteps")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OwnerId", "FoundDay");
+
+                    b.HasIndex("SpeciesId", "Serial")
+                        .IsUnique();
+
+                    b.ToTable("WalkingMonsters");
+                });
+
             modelBuilder.Entity("GameServices.Api.Data.WalkingProfile", b =>
                 {
                     b.Property<Guid>("UserId")
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid?>("CompanionMonsterId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("EncounterSteps")
+                        .HasColumnType("INTEGER");
+
                     b.Property<int>("FlaggedReports")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Glimmer")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("GlimmerStepRemainder")
                         .HasColumnType("INTEGER");
 
                     b.Property<DateTime?>("LastReportUtc")
                         .HasColumnType("TEXT");
 
                     b.Property<long>("LifetimeSteps")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("PacksDay")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("PacksToday")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("PhoneGlimmerDay")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("PhoneGlimmerToday")
                         .HasColumnType("INTEGER");
 
                     b.Property<int>("RacesLost")
@@ -1089,6 +1294,9 @@ namespace GameServices.Api.Migrations
                         .HasColumnType("INTEGER");
 
                     b.Property<bool>("ShareSteps")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("WalletStarted")
                         .HasColumnType("INTEGER");
 
                     b.HasKey("UserId");
@@ -1263,6 +1471,15 @@ namespace GameServices.Api.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("GameServices.Api.Data.MonsterOffer", b =>
+                {
+                    b.HasOne("GameServices.Api.Data.WalkingMonster", null)
+                        .WithMany()
+                        .HasForeignKey("MonsterId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("GameServices.Api.Data.OpponentReward", b =>
                 {
                     b.HasOne("GameServices.Api.Data.User", null)
@@ -1374,6 +1591,24 @@ namespace GameServices.Api.Migrations
                     b.HasOne("GameServices.Api.Data.User", null)
                         .WithMany()
                         .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("GameServices.Api.Data.WalkingLedgerEntry", b =>
+                {
+                    b.HasOne("GameServices.Api.Data.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("GameServices.Api.Data.WalkingMonster", b =>
+                {
+                    b.HasOne("GameServices.Api.Data.User", null)
+                        .WithMany()
+                        .HasForeignKey("OwnerId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

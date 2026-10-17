@@ -82,6 +82,55 @@ The walking game reports **today's total** about once a minute; the server decid
 
 **Races** count only steps walked *after* the race starts (everyone's all-time total is snapshotted when the challenge is accepted). `WalkingLifecycleService` checks once a minute: it finishes races whose time is up (and records the winner) and expires challenges nobody answered within 24 hours.
 
+## Walking monsters: made on the server, found by walking (`/api/walking/monsters`)
+
+The walking game isn't a collection game: you walk with a companion, and new monsters are **very rare** finds.
+The server is the only place they're made, so nobody can give themselves a Legendary by editing a save file.
+
+* **Starter:** the first `GET /api/walking/monsters` gives a walker their starter companion (always the starter
+  species, always Common).
+* **Finding:** every 5,000 steps the server accepts (`POST /api/walking/steps`) is one chance; each chance finds a
+  monster 1 time in 20, and never more than once a day. That's about one find per 100,000 steps. Steps carry over
+  between reports, so offline walking counts when it's reported. The step report's `NewFinds` tells the game to fetch
+  and reveal them.
+* **The dice:** species from the kind of place you're in (optional `biome` on the step report), rarity from the
+  game's rarity table (Legendary is about 1 in 100,000), a cryptographically random **seed**, and the hidden
+  **potential** (1 to 100) from seed + rarity. Every species has a running serial number ("#12 Emberling ever found").
+* **The phone draws it:** the server stores species, seed and rarity; the game rebuilds every detail (looks,
+  personality, stats) from those with its own generator, so the same recipe gives the same monster everywhere.
+  `MonsterDice.cs` is an exact copy of the game's dice, and tests check it against values the game produced.
+* `POST /api/walking/monsters/{id}/seen` marks a find as revealed, so it's never shown as new twice.
+
+The species list comes from Unity (`Wanderkin > Export Monster Catalog`, to `Walking/monster-catalog.json`). The
+odds live under `Monsters` in `appsettings.json`.
+
+## Walking Glimmer, packs and offers (`/api/walking/wallet`, `/packs`, `/offers`)
+
+**Glimmer lives on the server**, so packs and offers can't be paid for with made-up Glimmer. Walking earns it here
+(1 Glimmer per 100 accepted steps, added with each step report), and so do Guild Journey rewards and sales. Rewards
+won on the phone (battles, quests, milestones) are added at each `POST /api/walking/wallet/sync`, up to **300 a day**:
+the server can't watch a battle on a phone, so it believes a sensible amount and no more. The first sync brings the
+phone's balance across (up to 1,000). Every change is written to `WalkingLedger`.
+
+**Packs** (`GET /api/walking/packs`, `POST /api/walking/packs/{id}/open`) cost Glimmer, never real money, and the
+exact odds are listed from the same numbers the dice use. They hold Trail Tonics and Glimmer back, with a small chance
+of a sealed monster card, rolled on the server like a walking find. At most 3 a day.
+
+**Offers** let a walker offer Glimmer for a friend's monster; the owner decides. The rules:
+
+| Rule | Why |
+|---|---|
+| Friends only, never anyone blocked | Strangers making offers to children is a safety risk |
+| Glimmer only | Real-money trading invites scams and account selling |
+| A companion can't be offered for | It's the heart of the game |
+| 3 days with its walker first | No quick flipping |
+| Price limits by rarity (Common 50-500 ... Legendary 5,000-100,000) | No "1 Glimmer" tricks or funnelling |
+| 3 trades a week each, 5 open offers, offers expire after 2 days | Special, not a marketplace |
+
+The buyer's Glimmer is held when the offer is made, and returned on decline, cancel or expiry. On accept, the monster,
+**with its level and training** (sent up by the game via `PUT /api/walking/monsters/progress`, capped at what its
+potential allows), moves to its new walker; the seller is paid, and any other offers for it are refunded.
+
 ## Map relay: OpenStreetMap squares for the walking game (`/api/map`)
 
 `GET /api/map/15/{x}/{y}` returns one map square (roads, paths, rivers, coastline, parks, woods and water) as

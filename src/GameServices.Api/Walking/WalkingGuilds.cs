@@ -214,6 +214,10 @@ public static class WalkingGuilds
 
         db.GuildJourneyClaims.Add(new GuildJourneyClaim { UserId = me, GuildId = membership.GuildId, WeekStart = week, Glimmer = reward });
 
+        // The reward goes straight into the walker's Glimmer, kept here on the server.
+        WalkingProfile profile = await WalkingEndpoints.GetOrCreateProfile(db, me, cancel);
+        Wallet.WalkingWallet.Change(db, profile, reward, "journey", "Guild Journey reward");
+
         try
         {
             await db.SaveChangesAsync(cancel);

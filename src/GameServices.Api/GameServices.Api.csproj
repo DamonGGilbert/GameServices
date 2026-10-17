@@ -20,6 +20,7 @@
 
   <ItemGroup>
     <Content Update="Catalog\catalog.json" CopyToOutputDirectory="PreserveNewest" />
+    <Content Update="Walking\monster-catalog.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

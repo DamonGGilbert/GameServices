@@ -50,6 +50,10 @@ public class AppDbContext : DbContext
     public DbSet<StepRace> StepRaces => Set<StepRace>();
     public DbSet<GuildJourneyClaim> GuildJourneyClaims => Set<GuildJourneyClaim>();
     public DbSet<GuildStepRace> GuildStepRaces => Set<GuildStepRace>();
+    public DbSet<WalkingMonster> WalkingMonsters => Set<WalkingMonster>();
+    public DbSet<MonsterSpeciesCount> MonsterSpeciesCounts => Set<MonsterSpeciesCount>();
+    public DbSet<WalkingLedgerEntry> WalkingLedger => Set<WalkingLedgerEntry>();
+    public DbSet<MonsterOffer> MonsterOffers => Set<MonsterOffer>();
 
     // SQLite doesn't remember that a date is UTC, so we put the "UTC" label back
     // whenever we read one. Otherwise clients would see dates without the trailing Z.
@@ -302,6 +306,43 @@ public class AppDbContext : DbContext
             // One row per player per day, guaranteed by the database even if two reports race.
             d.HasIndex(x => new { x.UserId, x.Day }).IsUnique();
             d.HasOne<User>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        model.Entity<WalkingMonster>(m =>
+        {
+            m.HasKey(x => x.Id);
+            m.Property(x => x.SpeciesId).HasMaxLength(32).IsRequired();
+            m.Property(x => x.Source).HasMaxLength(16).IsRequired();
+            m.Property(x => x.BiomeId).HasMaxLength(32);
+            m.Property(x => x.FoundDay).HasMaxLength(10).IsRequired();
+            m.HasIndex(x => new { x.OwnerId, x.FoundDay });
+            // Every serial number exists once per species, guaranteed by the database even if two finds race.
+            m.HasIndex(x => new { x.SpeciesId, x.Serial }).IsUnique();
+            m.HasOne<User>().WithMany().HasForeignKey(x => x.OwnerId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        model.Entity<WalkingLedgerEntry>(l =>
+        {
+            l.HasKey(x => x.Id);
+            l.Property(x => x.Kind).HasMaxLength(24).IsRequired();
+            l.Property(x => x.Detail).HasMaxLength(120);
+            l.HasIndex(x => new { x.UserId, x.CreatedUtc });
+            l.HasOne<User>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        model.Entity<MonsterOffer>(o =>
+        {
+            o.HasKey(x => x.Id);
+            o.HasIndex(x => new { x.ToUserId, x.Status });
+            o.HasIndex(x => new { x.FromUserId, x.Status });
+            o.HasIndex(x => new { x.MonsterId, x.Status });
+            o.HasOne<WalkingMonster>().WithMany().HasForeignKey(x => x.MonsterId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        model.Entity<MonsterSpeciesCount>(c =>
+        {
+            c.HasKey(x => x.SpeciesId);
+            c.Property(x => x.SpeciesId).HasMaxLength(32);
         });
 
         model.Entity<Cheer>(c =>

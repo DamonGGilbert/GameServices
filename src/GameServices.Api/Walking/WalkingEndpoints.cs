@@ -2,14 +2,18 @@ using System.Security.Claims;
 using GameServices.Api.Chat;
 using GameServices.Api.Data;
 using GameServices.Api.Social;
+using GameServices.Api.Walking.Monsters;
+using GameServices.Api.Walking.Wallet;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 
 namespace GameServices.Api.Walking;
 
-public record StepReportRequest(string Day, int Steps, int UtcOffsetMinutes);
+/// <summary>Biome: the kind of place the walker is mostly in ("park", "coastal"...), so a find can suit it. Optional.</summary>
+public record StepReportRequest(string Day, int Steps, int UtcOffsetMinutes, string? Biome = null);
 
-public record StepReportResult(int AcceptedToday, int Added, int Rejected, long LifetimeSteps, bool Flagged, string Message);
+/// <summary>NewFinds: monsters found on this walk (fetch them from /api/walking/monsters and reveal them).</summary>
+public record StepReportResult(int AcceptedToday, int Added, int Rejected, long LifetimeSteps, bool Flagged, string Message, int NewFinds = 0);
 
 public record WalkingMeDto(int Today, int Week, long Lifetime, bool ShareSteps, int RacesWon, int RacesLost);
 
@@ -81,6 +85,13 @@ public static class WalkingEndpoints
         // Walking guilds: the weekly Guild Journey, the weekend step race and the ranking (WalkingGuilds.cs).
         group.MapWalkingGuildEndpoints();
 
+        // Monsters, made on the server and found (very rarely) by walking (Walking/Monsters), packs, offers between
+        // friends, and the Glimmer that pays for them (Walking/Wallet).
+        group.MapWalkingMonsterEndpoints();
+        group.MapWalkingPackEndpoints();
+        group.MapMonsterOfferEndpoints();
+        group.MapWalkingWalletEndpoints();
+
         group.MapGet("/races", MyRaces);
         group.MapPost("/races", Challenge);
         group.MapPost("/races/{raceId:guid}/accept", AcceptRace);
@@ -92,7 +103,7 @@ public static class WalkingEndpoints
 
     // ------------------------------------------------------------------ steps
 
-    private static async Task<IResult> ReportSteps(StepReportRequest request, ClaimsPrincipal principal, AppDbContext db, CancellationToken cancel)
+    private static async Task<IResult> ReportSteps(StepReportRequest request, ClaimsPrincipal principal, AppDbContext db, MonsterFinder finder, CancellationToken cancel)
     {
         if (!SocialEndpoints.TryGetUserId(principal, out Guid me)) return Results.Unauthorized();
 
@@ -133,6 +144,13 @@ public static class WalkingEndpoints
             profile.FlaggedReports++;
         }
 
+        // Walking earns Glimmer (1 per 100 steps)...
+        WalkingWallet.CreditSteps(db, profile, verdict.Added);
+
+        // ...and every 5,000 accepted steps is a (small) chance of finding a monster - saved together with the steps.
+        string? biome = string.IsNullOrWhiteSpace(request.Biome) ? null : request.Biome.Trim().ToLowerInvariant();
+        int newFinds = verdict.Added > 0 ? await MonsterEndpoints.RollFinds(db, finder, me, profile, verdict.Added, day, biome, cancel) : 0;
+
         try
         {
             await db.SaveChangesAsync(cancel);
@@ -147,7 +165,7 @@ public static class WalkingEndpoints
             ? $"{verdict.Rejected:N0} steps couldn't be counted (more than anyone can walk in that time)."
             : "";
 
-        return Results.Ok(new StepReportResult(verdict.AcceptedToday, verdict.Added, verdict.Rejected, profile.LifetimeSteps, verdict.Flagged, message));
+        return Results.Ok(new StepReportResult(verdict.AcceptedToday, verdict.Added, verdict.Rejected, profile.LifetimeSteps, verdict.Flagged, message, newFinds));
     }
 
     private static async Task<IResult> Me(ClaimsPrincipal principal, AppDbContext db, CancellationToken cancel)
