@@ -14,3 +14,6 @@ secrets.json
 # The built duel host program (rebuilt from the game project)
 duelhost/
 logs/
+
+# Map squares the relay has cached from OpenStreetMap (re-fetched if deleted)
+map-cache/

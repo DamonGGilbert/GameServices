@@ -2,6 +2,7 @@ using GameServices.Api.Auth;
 using GameServices.Api.Catalog;
 using GameServices.Api.Chat;
 using GameServices.Api.Guilds;
+using GameServices.Api.Map;
 using GameServices.Api.Social;
 using GameServices.Api.Economy;
 using GameServices.Api.Data;
@@ -69,6 +70,7 @@ app.MapAvatarEndpoints();
 app.MapCosmeticImageEndpoints();
 app.MapProfileCardEndpoints();
 app.MapOnlineEndpoints();
+app.MapMapEndpoints();
 app.MapHub<ChatHub>("/hubs/chat");
 
 app.Run();

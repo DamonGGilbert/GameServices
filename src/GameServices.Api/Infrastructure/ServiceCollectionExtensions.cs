@@ -119,6 +119,9 @@ public static class ServiceCollectionExtensions
         // ---- Rate limiting: a few attempts per minute per IP on the sign-in endpoints ----
         int permits = configuration.GetValue("RateLimit:AuthRequestsPerMinute", 20);
 
+        // ...and a generous limit on map squares (a phone wants 9 at once, then a few more as you walk).
+        int mapPermits = configuration.GetValue("RateLimit:MapRequestsPerMinute", 120);
+
         services.AddRateLimiter(limiter =>
         {
             limiter.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
@@ -131,7 +134,26 @@ public static class ServiceCollectionExtensions
                         PermitLimit = permits,
                         Window = TimeSpan.FromMinutes(1)
                     }));
+
+            limiter.AddPolicy("map", httpContext =>
+                RateLimitPartition.GetFixedWindowLimiter(
+                    httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                    _ => new FixedWindowRateLimiterOptions
+                    {
+                        PermitLimit = mapPermits,
+                        Window = TimeSpan.FromMinutes(1)
+                    }));
         });
+
+        // ---- The map relay (OpenStreetMap squares for the walking game, fetched once and shared) ----
+        services.AddHttpClient(GameServices.Api.Map.OverpassUpstream.HttpClientName, http =>
+        {
+            http.Timeout = TimeSpan.FromSeconds(60);
+            // Overpass asks every app to say who it is.
+            http.DefaultRequestHeaders.UserAgent.ParseAdd("GameServices-MapRelay/1.0 (Wanderkin walking game)");
+        });
+        services.AddSingleton<GameServices.Api.Map.IMapUpstream, GameServices.Api.Map.OverpassUpstream>();
+        services.AddSingleton<GameServices.Api.Map.MapTileStore>();
 
         // ---- API documentation ----
         services.AddOpenApi();

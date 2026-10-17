@@ -82,6 +82,31 @@ The walking game reports **today's total** about once a minute; the server decid
 
 **Races** count only steps walked *after* the race starts (everyone's all-time total is snapshotted when the challenge is accepted). `WalkingLifecycleService` checks once a minute: it finishes races whose time is up (and records the winner) and expires challenges nobody answered within 24 hours.
 
+## Map relay: OpenStreetMap squares for the walking game (`/api/map`)
+
+`GET /api/map/15/{x}/{y}` returns one map square (roads, paths, rivers, coastline, parks, woods and water) as
+Overpass JSON, which is exactly what the walking game's drawn map reads.
+
+Why it exists: the public Overpass servers are run by volunteers for developers, not as the back end for an app
+with many players, and they're often too busy to answer. So the server fetches each square **once**, keeps it on disk
+(`map-cache/`, gzip, about 20 to 70 KB each) for 30 days, and shares it with every player who walks there.
+
+| Situation | What happens |
+|---|---|
+| Fresh copy on disk | Sent straight away (about 0.3 s instead of about 30 s from Overpass) |
+| No copy yet | Fetched from Overpass, saved, sent |
+| Overpass busy or down | The old copy, marked `X-Map-Stale: true`; with no copy at all, `503` plus `Retry-After` |
+| 50 players ask for one square at once | One fetch; everyone shares it ("request coalescing") |
+
+The relay is polite to Overpass: one request at a time, a 1.5 s gap, a pause for everyone after "429 too busy", and
+an answer with a `remark` (Overpass gave up part-way) counts as a failure, never a half-empty square.
+
+**Privacy:** no account is needed or looked at, and map requests aren't logged. A square is about 1 km across, so the
+server never builds up a picture of where anyone walks. Settings live under `Map` in `appsettings.json`
+(cache folder, days, Overpass addresses), and there's a separate rate limit (`RateLimit:MapRequestsPerMinute`).
+
+Map data © OpenStreetMap contributors, available under the Open Database Licence.
+
 ## How sign-in works
 
 1. **Register**: the server validates the input, stores only a salted **hash** of the password, and returns tokens.
