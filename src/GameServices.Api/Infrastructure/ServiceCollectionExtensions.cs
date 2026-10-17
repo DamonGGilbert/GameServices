@@ -51,6 +51,7 @@ public static class ServiceCollectionExtensions
         // ---- Online duels ----
         services.Configure<GameServices.Api.Online.OnlineOptions>(configuration.GetSection(GameServices.Api.Online.OnlineOptions.SectionName));
         services.AddSingleton<GameServices.Api.Online.RoomRegistry>();
+        services.AddSingleton<GameServices.Api.Online.DuelInviteRegistry>();
         services.AddSingleton<GameServices.Api.Online.IHostLauncher, GameServices.Api.Online.ProcessHostLauncher>();
         services.AddSingleton<GameServices.Api.Online.MatchCoordinator>();
         services.AddScoped<GameServices.Api.Online.MatchResults>();

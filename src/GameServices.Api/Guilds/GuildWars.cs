@@ -134,8 +134,10 @@ public static class GuildWars
             .Select(g => g.Key)
             .ToListAsync(cancel);
 
+        // Guild Wars are fought with card duels, so only card-game guilds take part (the walking game has its own
+        // weekend step race).
         List<Guild> guilds = await db.Guilds
-            .Where(g => ready.Contains(g.Id) && !busy.Contains(g.Id))
+            .Where(g => g.GameId == Infrastructure.GameIds.Yugioh && ready.Contains(g.Id) && !busy.Contains(g.Id))
             .ToListAsync(cancel);
 
         // Similar ratings face each other.

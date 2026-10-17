@@ -215,7 +215,7 @@ public static partial class ProfileCardEndpoints
 
         var guild = await (from m in db.GuildMembers.AsNoTracking()
                            join g in db.Guilds.AsNoTracking() on m.GuildId equals g.Id
-                           where m.UserId == id
+                           where m.UserId == id && m.GameId == GameServices.Api.Infrastructure.GameIds.Yugioh // the card game's profile card
                            select new { g.Name, g.Tag, m.Role }).FirstOrDefaultAsync(cancel);
 
         int wins = await db.DuelMatches.AsNoTracking().CountAsync(m => (m.Player0Id == id && m.WinnerSeat == 0) || (m.Player1Id == id && m.WinnerSeat == 1), cancel);

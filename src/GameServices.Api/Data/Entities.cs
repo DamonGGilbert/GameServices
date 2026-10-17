@@ -221,6 +221,13 @@ public enum GuildRole { Member = 0, Officer = 1, Leader = 2 }
 public class Guild
 {
     public Guid Id { get; set; } = Guid.NewGuid();
+
+    /// <summary>
+    /// Which game this guild belongs to ("yugioh" or "walking", see GameIds). Guilds never mix between games:
+    /// a walking-game guild is invisible to the card game and the other way round. Older guilds are "yugioh".
+    /// </summary>
+    public string GameId { get; set; } = Infrastructure.GameIds.Yugioh;
+
     public string Name { get; set; } = "";
     public string NormalizedName { get; set; } = "";
 
@@ -305,12 +312,18 @@ public class DuelMatch
     public int Guild1Delta { get; set; }
 }
 
-/// <summary>Membership. A player can be in at most ONE guild (the unique index on UserId enforces it).</summary>
+/// <summary>
+/// Membership. A player can be in at most ONE guild PER GAME (the unique index on UserId + GameId enforces it),
+/// so the same person can lead a card-game guild and walk with a walking-game guild.
+/// </summary>
 public class GuildMember
 {
     public Guid Id { get; set; } = Guid.NewGuid();
     public Guid GuildId { get; set; }
     public Guid UserId { get; set; }
+
+    /// <summary>A copy of the guild's GameId, kept here so the database can enforce "one guild per player per game".</summary>
+    public string GameId { get; set; } = Infrastructure.GameIds.Yugioh;
     public GuildRole Role { get; set; }
     public DateTime JoinedUtc { get; set; } = DateTime.UtcNow;
 
@@ -408,4 +421,127 @@ public class UserCosmeticImage
     public byte[] Data { get; set; } = Array.Empty<byte>();
     public string ContentType { get; set; } = "image/jpeg";
     public DateTime UpdatedUtc { get; set; } = DateTime.UtcNow;
+}
+
+// ====================================================================================================
+// THE WALKING GAME
+// ====================================================================================================
+
+/// <summary>
+/// One player's walking-game record. The SERVER keeps these numbers: the game reports steps, the server decides how
+/// many are believable (see Walking/StepRules) and adds only those.
+/// </summary>
+public class WalkingProfile
+{
+    public Guid UserId { get; set; }
+
+    /// <summary>Every accepted step, ever. Step races measure progress from this.</summary>
+    public long LifetimeSteps { get; set; }
+
+    /// <summary>When the last report was accepted (used for the cadence check and the report rate limit).</summary>
+    public DateTime? LastReportUtc { get; set; }
+
+    /// <summary>Privacy: may friends see my daily and weekly steps? On by default (friends only, never strangers).</summary>
+    public bool ShareSteps { get; set; } = true;
+
+    public int RacesWon { get; set; }
+    public int RacesLost { get; set; }
+
+    /// <summary>How many reports were clipped hard enough to look suspicious.</summary>
+    public int FlaggedReports { get; set; }
+}
+
+/// <summary>Accepted steps for one player on one day (the player's own calendar day, "yyyy-MM-dd").</summary>
+public class WalkingDay
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid UserId { get; set; }
+    public string Day { get; set; } = "";
+    public int Steps { get; set; }
+    public int RejectedSteps { get; set; }
+    public DateTime UpdatedUtc { get; set; } = DateTime.UtcNow;
+}
+
+/// <summary>A friendly "Keep going!" from one friend to another. Limited per friend per day.</summary>
+public class Cheer
+{
+    public long Id { get; set; }
+    public Guid FromUserId { get; set; }
+    public Guid ToUserId { get; set; }
+
+    /// <summary>Which phrase (see WalkingEndpoints.CheerPhrases). A fixed list, so cheers can never be abusive.</summary>
+    public int Kind { get; set; }
+    public DateTime SentUtc { get; set; } = DateTime.UtcNow;
+    public DateTime? SeenUtc { get; set; }
+}
+
+public enum RaceStatus { Pending = 0, Active = 1, Finished = 2, Declined = 3, Cancelled = 4, Expired = 5 }
+
+/// <summary>
+/// A friendly step race between two friends. It starts when the opponent accepts; each player's progress is how many
+/// accepted steps they have added since then (LifetimeSteps now minus LifetimeSteps at the start).
+/// </summary>
+public class StepRace
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid ChallengerId { get; set; }
+    public Guid OpponentId { get; set; }
+    public RaceStatus Status { get; set; } = RaceStatus.Pending;
+
+    /// <summary>How long the race lasts once accepted: 24 or 72 hours.</summary>
+    public int Hours { get; set; }
+
+    public DateTime CreatedUtc { get; set; } = DateTime.UtcNow;
+    public DateTime? StartsUtc { get; set; }
+    public DateTime? EndsUtc { get; set; }
+
+    // Lifetime steps at the start, and the progress when the race ended.
+    public long ChallengerBaseline { get; set; }
+    public long OpponentBaseline { get; set; }
+    public int ChallengerSteps { get; set; }
+    public int OpponentSteps { get; set; }
+
+    /// <summary>The winner, or null for a draw / while it is still running.</summary>
+    public Guid? WinnerId { get; set; }
+}
+
+/// <summary>
+/// A player collected their reward for a finished weekly Guild Journey (walking game). One per player per week,
+/// guaranteed by a unique index, so the reward can never be claimed twice.
+/// </summary>
+public class GuildJourneyClaim
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid UserId { get; set; }
+    public Guid GuildId { get; set; }
+
+    /// <summary>The Monday the Journey week started, "yyyy-MM-dd" (UTC).</summary>
+    public string WeekStart { get; set; } = "";
+
+    /// <summary>How much Glimmer the server worked out the player earned.</summary>
+    public int Glimmer { get; set; }
+
+    public DateTime ClaimedUtc { get; set; } = DateTime.UtcNow;
+}
+
+/// <summary>
+/// The walking game's weekend guild-vs-guild step race (Saturday 00:00 to Monday 00:00 UTC). Each guild's score is
+/// the steps of its top walkers over the weekend. Kept apart from the card game's GuildWar, so neither game's job can
+/// ever close the other's.
+/// </summary>
+public class GuildStepRace
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid GuildAId { get; set; }
+    public Guid GuildBId { get; set; }
+    public DateTime StartsUtc { get; set; }
+    public DateTime EndsUtc { get; set; }
+    public RaceStatus Status { get; set; } = RaceStatus.Active;
+
+    // Filled in when the race ends (while it runs, the score is worked out live from the step reports).
+    public int ScoreA { get; set; }
+    public int ScoreB { get; set; }
+
+    /// <summary>The winning guild, or null for a draw / while it is still running.</summary>
+    public Guid? WinnerGuildId { get; set; }
 }

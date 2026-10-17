@@ -162,8 +162,9 @@ public static class CosmeticImageEndpoints
             return true;
         }
 
-        Guid? viewerGuild = await db.GuildMembers.AsNoTracking().Where(m => m.UserId == viewer).Select(m => (Guid?)m.GuildId).FirstOrDefaultAsync(cancel);
+        // Guildmates may see it too - in any game, now that a player can be in one guild per game.
+        IQueryable<Guid> viewerGuilds = db.GuildMembers.AsNoTracking().Where(m => m.UserId == viewer).Select(m => m.GuildId);
 
-        return viewerGuild != null && await db.GuildMembers.AsNoTracking().AnyAsync(m => m.UserId == owner && m.GuildId == viewerGuild, cancel);
+        return await db.GuildMembers.AsNoTracking().AnyAsync(m => m.UserId == owner && viewerGuilds.Contains(m.GuildId), cancel);
     }
 }

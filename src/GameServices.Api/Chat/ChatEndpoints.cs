@@ -30,12 +30,12 @@ public class ChatHub(AppDbContext db) : Hub
         {
             await Groups.AddToGroupAsync(Context.ConnectionId, Group(me));
 
-            // ...and the room of their guild, if they are in one.
-            Guid? guildId = await db.GuildMembers.AsNoTracking().Where(m => m.UserId == me).Select(m => (Guid?)m.GuildId).FirstOrDefaultAsync();
+            // ...and the room of each guild they are in (one per game), so guild chat arrives live in every game.
+            List<Guid> guildIds = await db.GuildMembers.AsNoTracking().Where(m => m.UserId == me).Select(m => m.GuildId).ToListAsync();
 
-            if (guildId != null)
+            foreach (Guid guildId in guildIds)
             {
-                await Groups.AddToGroupAsync(Context.ConnectionId, GuildGroup(guildId.Value));
+                await Groups.AddToGroupAsync(Context.ConnectionId, GuildGroup(guildId));
             }
         }
 

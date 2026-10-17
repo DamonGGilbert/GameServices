@@ -31,6 +31,57 @@ Then open **http://localhost:5080/scalar/v1** in a browser: a page where you can
 | POST | `/api/auth/logout` | Revoke a refresh token |
 | GET  | `/api/me` | Who am I? (needs `Authorization: Bearer <access token>`) |
 
+## Which game is asking? (`X-Game-Id`)
+
+One account plays every game, but **guilds belong to one game**. Each game sends a header with every request:
+
+| Header value | Game | Guild size |
+| ------------ | ---- | ---------- |
+| *(no header)* or `yugioh` | the card game | up to 30 |
+| `walking` | the walking game | up to 10 |
+
+- A player can be in **one guild per game** (database index on `UserId + GameId`), and guild names are unique per game.
+- Each game only sees, joins and gets invited to **its own** guilds. Older guilds were made before this existed, so they count as card-game guilds.
+- Bosses, line-ups and Guild Wars use cards and Duel Points, so they are card-game only (other games get a 404).
+- Friends, blocking, direct chat and avatars stay **account-wide**, so your friends follow you between games.
+- Limits live in one place: `Infrastructure/GameIds.cs` (`MaxGuildMembers`). Guild replies include `maxMembers`, so the games' "x/10" displays never drift.
+
+## Walking: steps, cheers and step races (`/api/walking`)
+
+The walking game reports **today's total** about once a minute; the server decides how much of it to believe (`Walking/StepRules.cs`).
+
+| Route | What it does |
+| ----- | ------------ |
+| `POST /steps` | `{ day, steps, utcOffsetMinutes }` - today's total. Returns what was accepted. |
+| `GET /me` | My today / week / all-time, races won and lost, and the privacy switch. |
+| `PUT /privacy` | `{ shareSteps }` - may friends see my steps? (On by default.) |
+| `GET /friends` | Friends' steps today and this week (zeros if they keep them private). |
+| `GET /cheers/phrases` | The fixed list of cheers ("Keep going!" ...). Players pick one; they can't type their own. |
+| `POST /cheers/{friendId}` | `{ kind }` - cheer on a friend (3 per friend per day). |
+| `GET /cheers`, `POST /cheers/seen` | Cheers I haven't seen yet; mark them seen. |
+| `GET /races`, `POST /races` | My races; challenge a friend `{ friendId, hours }` (24 or 72; up to 3 open races). |
+| `POST /races/{id}/accept`, `/decline`, `/cancel` | Answer or withdraw a challenge. |
+
+**Anti-cheat rules** (server-side, so a modified app can't skip them):
+- No more than **200 steps a minute** since the last report (plus a little slack), and **60,000 a day**.
+- Totals only go up; one report every **15 seconds** at most (`429` otherwise).
+- The day must be *today* where the player is (offset within ±14 hours, with a 2-hour grace just after midnight).
+- Anything over the limit is rejected and counted; more than 1,000 rejected steps flags the profile for a look.
+
+**Walking guilds** (`Walking/WalkingGuilds.cs`, guilds of up to 10):
+
+| Route | What it does |
+| ----- | ------------ |
+| `GET /guild/journey` | This week's **Guild Journey**: a shared target of 5,000 steps a day per member (Monday-Sunday, UTC), who walked what, and last week's result. |
+| `POST /guild/journey/claim` | Collect last week's reward (Glimmer). Once per player per week (unique index). |
+| `GET /guild/race` | This weekend's **guild step race** (Saturday-Monday, UTC), the last result, or when the next one starts. |
+| `GET /guild/ranking` | The top 10 walking guilds by tier score. |
+
+- Journey reward = 250 x (how far the guild got, max 100%) x (how much of your fair share you walked, max 100%), plus 100 if the guild hit its target. So the most anyone can earn is 350, and one keen walker can't carry everyone.
+- Each Saturday, walking guilds with at least 2 members are paired by rating. A guild's score is its **top 5** walkers' weekend steps. The winner gets +1 war win and +20 rating, which uses the same tiers and banners as the card game. These races live in their own `GuildStepRaces` table, so the card game's Guild Wars job never touches them.
+
+**Races** count only steps walked *after* the race starts (everyone's all-time total is snapshotted when the challenge is accepted). `WalkingLifecycleService` checks once a minute: it finishes races whose time is up (and records the winner) and expires challenges nobody answered within 24 hours.
+
 ## How sign-in works
 
 1. **Register**: the server validates the input, stores only a salted **hash** of the password, and returns tokens.

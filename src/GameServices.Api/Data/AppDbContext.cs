@@ -43,6 +43,14 @@ public class AppDbContext : DbContext
     public DbSet<UserAvatar> Avatars => Set<UserAvatar>();
     public DbSet<UserCosmeticImage> CosmeticImages => Set<UserCosmeticImage>();
 
+    // The walking game.
+    public DbSet<WalkingProfile> WalkingProfiles => Set<WalkingProfile>();
+    public DbSet<WalkingDay> WalkingDays => Set<WalkingDay>();
+    public DbSet<Cheer> Cheers => Set<Cheer>();
+    public DbSet<StepRace> StepRaces => Set<StepRace>();
+    public DbSet<GuildJourneyClaim> GuildJourneyClaims => Set<GuildJourneyClaim>();
+    public DbSet<GuildStepRace> GuildStepRaces => Set<GuildStepRace>();
+
     // SQLite doesn't remember that a date is UTC, so we put the "UTC" label back
     // whenever we read one. Otherwise clients would see dates without the trailing Z.
     protected override void ConfigureConventions(ModelConfigurationBuilder configuration)
@@ -192,15 +200,21 @@ public class AppDbContext : DbContext
             g.Property(x => x.NormalizedName).HasMaxLength(20).IsRequired();
             g.Property(x => x.Tag).HasMaxLength(4).IsRequired();
             g.Property(x => x.Description).HasMaxLength(140);
-            g.HasIndex(x => x.NormalizedName).IsUnique();
+
+            // Existing rows (made before games were told apart) become card-game guilds.
+            g.Property(x => x.GameId).HasMaxLength(40).IsRequired().HasDefaultValue(Infrastructure.GameIds.Yugioh);
+
+            // Names are unique WITHIN a game: the walking game can have its own "Night Owls".
+            g.HasIndex(x => new { x.GameId, x.NormalizedName }).IsUnique();
         });
 
         model.Entity<GuildMember>(m =>
         {
             m.HasKey(x => x.Id);
+            m.Property(x => x.GameId).HasMaxLength(40).IsRequired().HasDefaultValue(Infrastructure.GameIds.Yugioh);
 
-            // One guild per player, guaranteed by the database even if two joins race.
-            m.HasIndex(x => x.UserId).IsUnique();
+            // One guild per player PER GAME, guaranteed by the database even if two joins race.
+            m.HasIndex(x => new { x.UserId, x.GameId }).IsUnique();
             m.HasIndex(x => x.GuildId);
             m.HasOne<Guild>().WithMany().HasForeignKey(x => x.GuildId).OnDelete(DeleteBehavior.Cascade);
             m.HasOne<User>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
@@ -270,6 +284,62 @@ public class AppDbContext : DbContext
             c.Property(x => x.CodeHash).HasMaxLength(64).IsRequired();
             c.HasIndex(x => new { x.UserId, x.CreatedUtc });
             c.HasOne<User>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // ---------------- the walking game ----------------
+
+        model.Entity<WalkingProfile>(p =>
+        {
+            p.HasKey(x => x.UserId);
+            p.HasOne<User>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        model.Entity<WalkingDay>(d =>
+        {
+            d.HasKey(x => x.Id);
+            d.Property(x => x.Day).HasMaxLength(10).IsRequired();
+
+            // One row per player per day, guaranteed by the database even if two reports race.
+            d.HasIndex(x => new { x.UserId, x.Day }).IsUnique();
+            d.HasOne<User>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        model.Entity<Cheer>(c =>
+        {
+            c.HasKey(x => x.Id);
+            c.HasIndex(x => new { x.ToUserId, x.Id });
+            c.HasIndex(x => new { x.FromUserId, x.ToUserId, x.SentUtc });
+            c.HasOne<User>().WithMany().HasForeignKey(x => x.FromUserId).OnDelete(DeleteBehavior.Cascade);
+            c.HasOne<User>().WithMany().HasForeignKey(x => x.ToUserId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        model.Entity<StepRace>(r =>
+        {
+            r.HasKey(x => x.Id);
+            r.HasIndex(x => new { x.ChallengerId, x.Status });
+            r.HasIndex(x => new { x.OpponentId, x.Status });
+            r.HasIndex(x => new { x.Status, x.EndsUtc });
+            r.HasOne<User>().WithMany().HasForeignKey(x => x.ChallengerId).OnDelete(DeleteBehavior.Cascade);
+            r.HasOne<User>().WithMany().HasForeignKey(x => x.OpponentId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        model.Entity<GuildJourneyClaim>(c =>
+        {
+            c.HasKey(x => x.Id);
+            c.Property(x => x.WeekStart).HasMaxLength(10).IsRequired();
+
+            // One reward per player per week, even if two claims arrive at once.
+            c.HasIndex(x => new { x.UserId, x.WeekStart }).IsUnique();
+            c.HasOne<User>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        model.Entity<GuildStepRace>(r =>
+        {
+            r.HasKey(x => x.Id);
+            r.HasIndex(x => x.StartsUtc);
+            r.HasIndex(x => new { x.Status, x.EndsUtc });
+            r.HasIndex(x => x.GuildAId);
+            r.HasIndex(x => x.GuildBId);
         });
 
         model.Entity<RefreshToken>(token =>

@@ -8,6 +8,7 @@ using GameServices.Api.Data;
 using GameServices.Api.Infrastructure;
 using GameServices.Api.Online;
 using GameServices.Api.Saves;
+using GameServices.Api.Walking;
 using Microsoft.EntityFrameworkCore;
 using Scalar.AspNetCore;
 
@@ -16,6 +17,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddGameServices(builder.Configuration);
 builder.Services.AddSignalR();
 builder.Services.AddHostedService<BossLifecycleService>();
+builder.Services.AddHostedService<WalkingLifecycleService>();
 
 // The list of cards that exist (exported from Unity). Loaded once at startup.
 string catalogPath = builder.Configuration["Catalog:Path"] ?? Path.Combine(builder.Environment.ContentRootPath, "Catalog", "catalog.json");
@@ -61,6 +63,7 @@ app.MapEconomyEndpoints();
 app.MapSocialEndpoints();
 app.MapChatEndpoints();
 app.MapGuildEndpoints();
+app.MapWalkingEndpoints();
 app.MapShowcaseEndpoints();
 app.MapAvatarEndpoints();
 app.MapCosmeticImageEndpoints();

@@ -48,6 +48,8 @@ public static partial class OnlineEndpoints
         rooms.MapPost("/leave", LeaveRoom);
         rooms.MapPost("/mine/deck", SetDeck);
 
+        MapDuelInvites(app);
+
         app.MapGet("/api/guilds/leaderboard", Leaderboard).WithTags("Online").RequireAuthorization();
         app.MapGet("/api/matches/mine", MyMatches).WithTags("Online").RequireAuthorization();
 
@@ -81,7 +83,7 @@ public static partial class OnlineEndpoints
 
         var guild = await (from m in db.GuildMembers.AsNoTracking()
                            join g in db.Guilds.AsNoTracking() on m.GuildId equals g.Id
-                           where m.UserId == userId
+                           where m.UserId == userId && m.GameId == GameServices.Api.Infrastructure.GameIds.Yugioh // duels are card-game only
                            select new { g.Id, g.Tag, g.Name }).FirstOrDefaultAsync(cancel);
 
         return new RoomSeat { UserId = userId, Username = name, GuildId = guild?.Id, GuildTag = guild?.Tag ?? "", GuildName = guild?.Name ?? "", Showcase = new GameServices.Api.Social.ShowcaseDto(user.ShowLevel, user.ShowPrestige, user.ShowEmblem, user.ShowFrame, user.ShowTitle), Cosmetics = user.CosmeticsJson, Greeting = GameServices.Api.Social.ProfileCardEndpoints.Read(user.ProfileJson).Greeting };
@@ -229,7 +231,7 @@ public static partial class OnlineEndpoints
         TryUser(principal, out Guid me);
         int count = Math.Clamp(top ?? 50, 1, 200);
 
-        var rows = await db.Guilds.AsNoTracking()
+        var rows = await db.Guilds.AsNoTracking().Where(g => g.GameId == GameServices.Api.Infrastructure.GameIds.Yugioh) // the card game's leaderboard
             .Select(g => new
             {
                 g.Id, g.Name, g.Tag, g.Rating, g.Wins, g.Losses, g.Draws, g.WarWins, g.BannerStyle,
@@ -244,7 +246,7 @@ public static partial class OnlineEndpoints
                 GameServices.Api.Guilds.GuildTiers.TierOf(g.Rating, g.WarWins), GameServices.Api.Guilds.GuildTiers.NameOf(GameServices.Api.Guilds.GuildTiers.TierOf(g.Rating, g.WarWins)), g.WarWins, g.BannerStyle))
             .ToList();
 
-        Guid myGuild = await db.GuildMembers.AsNoTracking().Where(m => m.UserId == me).Select(m => m.GuildId).FirstOrDefaultAsync(cancel);
+        Guid myGuild = await db.GuildMembers.AsNoTracking().Where(m => m.UserId == me && m.GameId == GameServices.Api.Infrastructure.GameIds.Yugioh).Select(m => m.GuildId).FirstOrDefaultAsync(cancel);
         int myRank = myGuild == Guid.Empty ? 0 : ranked.FirstOrDefault(g => g.GuildId == myGuild)?.Rank ?? 0;
 
         return Results.Ok(new GuildLeaderboard(ranked.Take(count).ToList(), myRank, myGuild));

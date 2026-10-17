@@ -4,6 +4,7 @@ using GameServices.Api.Catalog;
 using GameServices.Api.Chat;
 using GameServices.Api.Data;
 using GameServices.Api.Economy;
+using GameServices.Api.Infrastructure;
 using GameServices.Api.Social;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
@@ -12,7 +13,7 @@ namespace GameServices.Api.Guilds;
 
 public record CreateGuildRequest(string Name, string Tag, string? Description, bool IsOpen);
 
-public record GuildSummary(Guid Id, string Name, string Tag, string Description, bool IsOpen, int Members, int Rating = 1000, int Tier = 0, string TierName = "Rookie");
+public record GuildSummary(Guid Id, string Name, string Tag, string Description, bool IsOpen, int Members, int Rating = 1000, int Tier = 0, string TierName = "Rookie", int MaxMembers = 30);
 
 public record MemberDto(Guid UserId, string Username, string Role, bool IsOnline, int Slot, ShowcaseDto Showcase);
 
@@ -22,7 +23,7 @@ public record LeaderboardEntry(string Username, int Damage, int Attacks);
 
 public record BossInfo(Guid Id, string Key, string Name, int MaxHp, int CurrentHp, string Status, DateTime EndsUtc, int RewardPool, int MyAttacksLeft, List<LeaderboardEntry> Leaderboard);
 
-public record GuildDetail(Guid Id, string Name, string Tag, string Description, bool IsOpen, string MyRole, List<MemberDto> Members, BossInfo? Boss, DateTime? NextNameChangeUtc, int Rating = 1000, int Tier = 0, string TierName = "Rookie", int WarWins = 0, int WarLosses = 0, int BannerStyle = 0);
+public record GuildDetail(Guid Id, string Name, string Tag, string Description, bool IsOpen, string MyRole, List<MemberDto> Members, BossInfo? Boss, DateTime? NextNameChangeUtc, int Rating = 1000, int Tier = 0, string TierName = "Rookie", int WarWins = 0, int WarLosses = 0, int BannerStyle = 0, int MaxMembers = 30);
 
 public record UpdateGuildRequest(string? Name, string? Tag, string? Description, bool? IsOpen, int? BannerStyle = null);
 
@@ -49,9 +50,14 @@ public record GuildMessageDto(long Id, Guid UserId, string Username, string Text
 ///
 /// Roles: LEADER (one per guild) can do everything. OFFICERS invite, kick members and summon bosses.
 /// MEMBERS chat and fight. Every rule is checked here on the server, never trusted from the game.
+///
+/// PER GAME: every request says which game it comes from (the X-Game-Id header, see GameIds). A player sees, joins
+/// and runs only that game's guilds, and can be in one guild in each game. Bosses, line-ups and Guild Wars are
+/// card-game features (they use cards and Duel Points); the walking game has its own group goals.
 /// </summary>
 public static partial class GuildEndpoints
 {
+    /// <summary>The card game's member limit. Use GameIds.MaxGuildMembers(gameId) - the walking game allows 10.</summary>
     public const int MaxMembers = 30;
     public const int MainTeamSize = 5;
     public const int BenchSize = 3;
@@ -80,8 +86,8 @@ public static partial class GuildEndpoints
         group.MapPut("/details", UpdateDetails);
         group.MapGet("/war", War);
 
-        group.MapPost("/members/{userId:guid}/promote", (Guid userId, ClaimsPrincipal p, AppDbContext db, CancellationToken c) => ChangeRole(userId, GuildRole.Officer, p, db, c));
-        group.MapPost("/members/{userId:guid}/demote", (Guid userId, ClaimsPrincipal p, AppDbContext db, CancellationToken c) => ChangeRole(userId, GuildRole.Member, p, db, c));
+        group.MapPost("/members/{userId:guid}/promote", (Guid userId, HttpContext h, ClaimsPrincipal p, AppDbContext db, CancellationToken c) => ChangeRole(userId, GuildRole.Officer, h, p, db, c));
+        group.MapPost("/members/{userId:guid}/demote", (Guid userId, HttpContext h, ClaimsPrincipal p, AppDbContext db, CancellationToken c) => ChangeRole(userId, GuildRole.Member, h, p, db, c));
         group.MapPost("/members/{userId:guid}/kick", Kick);
         group.MapPost("/members/{userId:guid}/transfer", Transfer);
         group.MapPost("/lineup", SetLineup);
@@ -104,11 +110,14 @@ public static partial class GuildEndpoints
 
     // ------------------------------------------------------------------ find / create
 
-    private static async Task<IResult> Search(string? q, AppDbContext db, CancellationToken cancel)
+    private static async Task<IResult> Search(string? q, HttpContext http, AppDbContext db, CancellationToken cancel)
     {
+        if (!GameIds.TryFromRequest(http, out string game, out IResult? bad)) return bad!;
+
         string needle = (q ?? "").Trim().ToUpperInvariant();
 
-        IQueryable<Guild> guilds = db.Guilds.AsNoTracking();
+        // Only this game's guilds.
+        IQueryable<Guild> guilds = db.Guilds.AsNoTracking().Where(g => g.GameId == game);
 
         if (needle.Length > 0)
         {
@@ -125,7 +134,7 @@ public static partial class GuildEndpoints
             .ToDictionaryAsync(x => x.Id, x => x.Count, cancel);
 
         List<GuildSummary> result = found
-            .Select(g => new GuildSummary(g.Id, g.Name, g.Tag, g.Description, g.IsOpen, counts.GetValueOrDefault(g.Id), g.Rating, GuildTiers.TierOf(g.Rating, g.WarWins), GuildTiers.NameOf(GuildTiers.TierOf(g.Rating, g.WarWins))))
+            .Select(g => new GuildSummary(g.Id, g.Name, g.Tag, g.Description, g.IsOpen, counts.GetValueOrDefault(g.Id), g.Rating, GuildTiers.TierOf(g.Rating, g.WarWins), GuildTiers.NameOf(GuildTiers.TierOf(g.Rating, g.WarWins)), GameIds.MaxGuildMembers(game)))
             .OrderByDescending(g => g.Members).ThenBy(g => g.Name)
             .Take(50)
             .ToList();
@@ -133,9 +142,10 @@ public static partial class GuildEndpoints
         return Results.Ok(result);
     }
 
-    private static async Task<IResult> Create(CreateGuildRequest request, ClaimsPrincipal principal, AppDbContext db, CancellationToken cancel)
+    private static async Task<IResult> Create(CreateGuildRequest request, HttpContext http, ClaimsPrincipal principal, AppDbContext db, CancellationToken cancel)
     {
         if (!SocialEndpoints.TryGetUserId(principal, out Guid me)) return Results.Unauthorized();
+        if (!GameIds.TryFromRequest(http, out string game, out IResult? bad)) return bad!;
 
         string name = (request?.Name ?? "").Trim();
         string tag = (request?.Tag ?? "").Trim();
@@ -151,21 +161,21 @@ public static partial class GuildEndpoints
             return Results.ValidationProblem(problems);
         }
 
-        if (await FindMembership(db, me, cancel) != null)
+        if (await FindMembership(db, me, game, cancel) != null)
         {
             return Results.Problem("You're already in a guild. Leave it first.", statusCode: StatusCodes.Status409Conflict);
         }
 
         string normalized = name.ToUpperInvariant();
 
-        if (await db.Guilds.AnyAsync(g => g.NormalizedName == normalized, cancel))
+        if (await db.Guilds.AnyAsync(g => g.GameId == game && g.NormalizedName == normalized, cancel))
         {
             return Results.Problem("That guild name is taken.", statusCode: StatusCodes.Status409Conflict);
         }
 
-        Guild guild = new() { Name = name, NormalizedName = normalized, Tag = tag.ToUpperInvariant(), Description = description, IsOpen = request!.IsOpen };
+        Guild guild = new() { GameId = game, Name = name, NormalizedName = normalized, Tag = tag.ToUpperInvariant(), Description = description, IsOpen = request!.IsOpen };
         db.Guilds.Add(guild);
-        db.GuildMembers.Add(new GuildMember { GuildId = guild.Id, UserId = me, Role = GuildRole.Leader, Slot = 1 });
+        db.GuildMembers.Add(new GuildMember { GuildId = guild.Id, UserId = me, GameId = game, Role = GuildRole.Leader, Slot = 1 });
 
         try
         {
@@ -176,14 +186,15 @@ public static partial class GuildEndpoints
             return Results.Problem("That guild name is taken.", statusCode: StatusCodes.Status409Conflict);
         }
 
-        return Results.Ok(new GuildSummary(guild.Id, guild.Name, guild.Tag, guild.Description, guild.IsOpen, 1));
+        return Results.Ok(new GuildSummary(guild.Id, guild.Name, guild.Tag, guild.Description, guild.IsOpen, 1, MaxMembers: GameIds.MaxGuildMembers(game)));
     }
 
-    private static async Task<IResult> Mine(ClaimsPrincipal principal, AppDbContext db, CancellationToken cancel)
+    private static async Task<IResult> Mine(HttpContext http, ClaimsPrincipal principal, AppDbContext db, CancellationToken cancel)
     {
         if (!SocialEndpoints.TryGetUserId(principal, out Guid me)) return Results.Unauthorized();
+        if (!GameIds.TryFromRequest(http, out string game, out IResult? bad)) return bad!;
 
-        GuildMember? membership = await FindMembership(db, me, cancel);
+        GuildMember? membership = await FindMembership(db, me, game, cancel);
 
         if (membership == null)
         {
@@ -207,7 +218,8 @@ public static partial class GuildEndpoints
             .Select(x => new MemberDto(x.UserId, x.Username, x.Role.ToString(), x.LastSeenUtc != null && now - x.LastSeenUtc.Value < SocialEndpoints.OnlineWindow, x.Slot, new ShowcaseDto(x.ShowLevel, x.ShowPrestige, x.ShowEmblem, x.ShowFrame, x.ShowTitle)))
             .ToList();
 
-        BossInfo? boss = await BuildBossInfo(db, guild.Id, me, cancel);
+        // Bosses are a card-game feature.
+        BossInfo? boss = game == GameIds.Yugioh ? await BuildBossInfo(db, guild.Id, me, cancel) : null;
 
         DateTime? nextNameChange = guild.NameChangedUtc != null && guild.NameChangedUtc.Value + NameChangeCooldown > now
             ? guild.NameChangedUtc.Value + NameChangeCooldown
@@ -216,7 +228,7 @@ public static partial class GuildEndpoints
         int tier = GuildTiers.TierOf(guild.Rating, guild.WarWins);
 
         return Results.Ok(new GuildDetail(guild.Id, guild.Name, guild.Tag, guild.Description, guild.IsOpen, membership.Role.ToString(), members, boss, nextNameChange,
-            guild.Rating, tier, GuildTiers.NameOf(tier), guild.WarWins, guild.WarLosses, guild.BannerStyle));
+            guild.Rating, tier, GuildTiers.NameOf(tier), guild.WarWins, guild.WarLosses, guild.BannerStyle, GameIds.MaxGuildMembers(game)));
     }
 
     // ------------------------------------------------------------------ guild details (leader only)
@@ -226,11 +238,12 @@ public static partial class GuildEndpoints
     /// is limited to once every 14 days, so a guild's identity can't be swapped back and forth to dodge a bad name.
     /// Only the fields that are sent are changed.
     /// </summary>
-    private static async Task<IResult> UpdateDetails(UpdateGuildRequest request, ClaimsPrincipal principal, AppDbContext db, CancellationToken cancel)
+    private static async Task<IResult> UpdateDetails(UpdateGuildRequest request, HttpContext http, ClaimsPrincipal principal, AppDbContext db, CancellationToken cancel)
     {
         if (!SocialEndpoints.TryGetUserId(principal, out Guid me)) return Results.Unauthorized();
+        if (!GameIds.TryFromRequest(http, out string game, out IResult? bad)) return bad!;
 
-        GuildMember? mine = await FindMembership(db, me, cancel);
+        GuildMember? mine = await FindMembership(db, me, game, cancel);
 
         if (mine == null || mine.Role != GuildRole.Leader)
         {
@@ -278,7 +291,7 @@ public static partial class GuildEndpoints
         {
             string normalized = newName!.ToUpperInvariant();
 
-            if (await db.Guilds.AnyAsync(g => g.NormalizedName == normalized && g.Id != guild.Id, cancel))
+            if (await db.Guilds.AnyAsync(g => g.GameId == guild.GameId && g.NormalizedName == normalized && g.Id != guild.Id, cancel))
             {
                 return Results.Problem("That guild name is taken.", statusCode: StatusCodes.Status409Conflict);
             }
@@ -322,16 +335,17 @@ public static partial class GuildEndpoints
         }
 
         int count = await db.GuildMembers.CountAsync(m => m.GuildId == guild.Id, cancel);
-        return Results.Ok(new GuildSummary(guild.Id, guild.Name, guild.Tag, guild.Description, guild.IsOpen, count));
+        return Results.Ok(new GuildSummary(guild.Id, guild.Name, guild.Tag, guild.Description, guild.IsOpen, count, MaxMembers: GameIds.MaxGuildMembers(game)));
     }
 
     // ------------------------------------------------------------------ guild war
 
-    private static async Task<IResult> War(ClaimsPrincipal principal, AppDbContext db, CancellationToken cancel)
+    private static async Task<IResult> War(HttpContext http, ClaimsPrincipal principal, AppDbContext db, CancellationToken cancel)
     {
         if (!SocialEndpoints.TryGetUserId(principal, out Guid me)) return Results.Unauthorized();
+        if (!CardGameOnly(http, out string game, out IResult? bad)) return bad!;
 
-        GuildMember? membership = await FindMembership(db, me, cancel);
+        GuildMember? membership = await FindMembership(db, me, game, cancel);
 
         if (membership == null)
         {
@@ -343,11 +357,13 @@ public static partial class GuildEndpoints
 
     // ------------------------------------------------------------------ joining / leaving
 
-    private static async Task<IResult> Join(Guid guildId, ClaimsPrincipal principal, AppDbContext db, CancellationToken cancel)
+    private static async Task<IResult> Join(Guid guildId, HttpContext http, ClaimsPrincipal principal, AppDbContext db, CancellationToken cancel)
     {
         if (!SocialEndpoints.TryGetUserId(principal, out Guid me)) return Results.Unauthorized();
+        if (!GameIds.TryFromRequest(http, out string game, out IResult? bad)) return bad!;
 
-        Guild? guild = await db.Guilds.FirstOrDefaultAsync(g => g.Id == guildId, cancel);
+        // A guild from another game looks exactly like one that doesn't exist.
+        Guild? guild = await db.Guilds.FirstOrDefaultAsync(g => g.Id == guildId && g.GameId == game, cancel);
 
         if (guild == null)
         {
@@ -359,25 +375,28 @@ public static partial class GuildEndpoints
             return Results.Problem("This guild is invite-only.", statusCode: StatusCodes.Status403Forbidden);
         }
 
-        return await AddMember(db, guild.Id, me, cancel);
+        return await AddMember(db, guild, me, cancel);
     }
 
-    private static async Task<IResult> AddMember(AppDbContext db, Guid guildId, Guid userId, CancellationToken cancel)
+    private static async Task<IResult> AddMember(AppDbContext db, Guild guild, Guid userId, CancellationToken cancel)
     {
-        if (await FindMembership(db, userId, cancel) != null)
+        if (await FindMembership(db, userId, guild.GameId, cancel) != null)
         {
             return Results.Problem("You're already in a guild. Leave it first.", statusCode: StatusCodes.Status409Conflict);
         }
 
-        if (await db.GuildMembers.CountAsync(m => m.GuildId == guildId, cancel) >= MaxMembers)
+        int maxMembers = GameIds.MaxGuildMembers(guild.GameId);
+
+        if (await db.GuildMembers.CountAsync(m => m.GuildId == guild.Id, cancel) >= maxMembers)
         {
-            return Results.Problem($"That guild is full ({MaxMembers} members).", statusCode: StatusCodes.Status409Conflict);
+            return Results.Problem($"That guild is full ({maxMembers} members).", statusCode: StatusCodes.Status409Conflict);
         }
 
-        db.GuildMembers.Add(new GuildMember { GuildId = guildId, UserId = userId, Role = GuildRole.Member, Slot = await FirstFreeSlot(db, guildId, cancel) });
+        db.GuildMembers.Add(new GuildMember { GuildId = guild.Id, UserId = userId, GameId = guild.GameId, Role = GuildRole.Member, Slot = await FirstFreeSlot(db, guild.Id, cancel) });
 
-        // Joining uses up any invites you were holding.
-        await db.GuildInvites.Where(i => i.UserId == userId).ExecuteDeleteAsync(cancel);
+        // Joining uses up any invites you were holding for guilds in THIS game (invites from the other game stay).
+        IQueryable<Guid> sameGameGuilds = db.Guilds.Where(g => g.GameId == guild.GameId).Select(g => g.Id);
+        await db.GuildInvites.Where(i => i.UserId == userId && sameGameGuilds.Contains(i.GuildId)).ExecuteDeleteAsync(cancel);
 
         try
         {
@@ -391,11 +410,12 @@ public static partial class GuildEndpoints
         return Results.NoContent();
     }
 
-    private static async Task<IResult> Leave(ClaimsPrincipal principal, AppDbContext db, CancellationToken cancel)
+    private static async Task<IResult> Leave(HttpContext http, ClaimsPrincipal principal, AppDbContext db, CancellationToken cancel)
     {
         if (!SocialEndpoints.TryGetUserId(principal, out Guid me)) return Results.Unauthorized();
+        if (!GameIds.TryFromRequest(http, out string game, out IResult? bad)) return bad!;
 
-        GuildMember? membership = await FindMembership(db, me, cancel);
+        GuildMember? membership = await FindMembership(db, me, game, cancel);
 
         if (membership == null)
         {
@@ -423,11 +443,13 @@ public static partial class GuildEndpoints
 
     // ------------------------------------------------------------------ roles
 
-    private static async Task<IResult> ChangeRole(Guid userId, GuildRole newRole, ClaimsPrincipal principal, AppDbContext db, CancellationToken cancel)
+    private static async Task<IResult> ChangeRole(Guid userId, GuildRole newRole, HttpContext http, ClaimsPrincipal principal, AppDbContext db, CancellationToken cancel)
     {
         if (!SocialEndpoints.TryGetUserId(principal, out Guid me)) return Results.Unauthorized();
 
-        GuildMember? mine = await FindMembership(db, me, cancel);
+        if (!GameIds.TryFromRequest(http, out string game, out IResult? bad)) return bad!;
+
+        GuildMember? mine = await FindMembership(db, me, game, cancel);
 
         if (mine == null || mine.Role != GuildRole.Leader)
         {
@@ -446,11 +468,13 @@ public static partial class GuildEndpoints
         return Results.NoContent();
     }
 
-    private static async Task<IResult> Kick(Guid userId, ClaimsPrincipal principal, AppDbContext db, CancellationToken cancel)
+    private static async Task<IResult> Kick(Guid userId, HttpContext http, ClaimsPrincipal principal, AppDbContext db, CancellationToken cancel)
     {
         if (!SocialEndpoints.TryGetUserId(principal, out Guid me)) return Results.Unauthorized();
 
-        GuildMember? mine = await FindMembership(db, me, cancel);
+        if (!GameIds.TryFromRequest(http, out string game, out IResult? bad)) return bad!;
+
+        GuildMember? mine = await FindMembership(db, me, game, cancel);
 
         if (mine == null || mine.Role < GuildRole.Officer)
         {
@@ -475,11 +499,13 @@ public static partial class GuildEndpoints
         return Results.NoContent();
     }
 
-    private static async Task<IResult> Transfer(Guid userId, ClaimsPrincipal principal, AppDbContext db, CancellationToken cancel)
+    private static async Task<IResult> Transfer(Guid userId, HttpContext http, ClaimsPrincipal principal, AppDbContext db, CancellationToken cancel)
     {
         if (!SocialEndpoints.TryGetUserId(principal, out Guid me)) return Results.Unauthorized();
 
-        GuildMember? mine = await FindMembership(db, me, cancel);
+        if (!GameIds.TryFromRequest(http, out string game, out IResult? bad)) return bad!;
+
+        GuildMember? mine = await FindMembership(db, me, game, cancel);
 
         if (mine == null || mine.Role != GuildRole.Leader)
         {
@@ -538,11 +564,13 @@ public static partial class GuildEndpoints
     }
 
     // Leader and officers choose who plays where. Putting someone into a taken place swaps the two.
-    private static async Task<IResult> SetLineup(LineupRequest request, ClaimsPrincipal principal, AppDbContext db, CancellationToken cancel)
+    private static async Task<IResult> SetLineup(LineupRequest request, HttpContext http, ClaimsPrincipal principal, AppDbContext db, CancellationToken cancel)
     {
         if (!SocialEndpoints.TryGetUserId(principal, out Guid me)) return Results.Unauthorized();
 
-        GuildMember? mine = await FindMembership(db, me, cancel);
+        if (!CardGameOnly(http, out string game, out IResult? bad)) return bad!;
+
+        GuildMember? mine = await FindMembership(db, me, game, cancel);
 
         if (mine == null || mine.Role == GuildRole.Member)
         {
@@ -576,27 +604,31 @@ public static partial class GuildEndpoints
 
     // ------------------------------------------------------------------ invites
 
-    private static async Task<IResult> MyInvites(ClaimsPrincipal principal, AppDbContext db, CancellationToken cancel)
+    private static async Task<IResult> MyInvites(HttpContext http, ClaimsPrincipal principal, AppDbContext db, CancellationToken cancel)
     {
         if (!SocialEndpoints.TryGetUserId(principal, out Guid me)) return Results.Unauthorized();
+        if (!GameIds.TryFromRequest(http, out string game, out IResult? bad)) return bad!;
 
         DateTime now = DateTime.UtcNow;
 
+        // Only invitations to this game's guilds.
         List<InviteDto> invites = await (from i in db.GuildInvites.AsNoTracking()
                                          join g in db.Guilds.AsNoTracking() on i.GuildId equals g.Id
                                          join u in db.Users.AsNoTracking() on i.InvitedById equals u.Id
-                                         where i.UserId == me && i.ExpiresUtc > now
+                                         where i.UserId == me && i.ExpiresUtc > now && g.GameId == game
                                          orderby i.CreatedUtc
                                          select new InviteDto(g.Id, g.Name, g.Tag, u.Username, i.ExpiresUtc)).ToListAsync(cancel);
 
         return Results.Ok(invites);
     }
 
-    private static async Task<IResult> Invite(UsernameRequest request, ClaimsPrincipal principal, AppDbContext db, CancellationToken cancel)
+    private static async Task<IResult> Invite(UsernameRequest request, HttpContext http, ClaimsPrincipal principal, AppDbContext db, CancellationToken cancel)
     {
         if (!SocialEndpoints.TryGetUserId(principal, out Guid me)) return Results.Unauthorized();
 
-        GuildMember? mine = await FindMembership(db, me, cancel);
+        if (!GameIds.TryFromRequest(http, out string game, out IResult? bad)) return bad!;
+
+        GuildMember? mine = await FindMembership(db, me, game, cancel);
 
         if (mine == null || mine.Role < GuildRole.Officer)
         {
@@ -612,7 +644,7 @@ public static partial class GuildEndpoints
             return Results.Problem("No player with that name.", statusCode: StatusCodes.Status404NotFound);
         }
 
-        if (await FindMembership(db, target.Id, cancel) != null)
+        if (await FindMembership(db, target.Id, game, cancel) != null)
         {
             return Results.Problem($"{target.Username} is already in a guild.", statusCode: StatusCodes.Status409Conflict);
         }
@@ -642,18 +674,20 @@ public static partial class GuildEndpoints
         return Results.Ok(new { invited = target.Username });
     }
 
-    private static async Task<IResult> AcceptInvite(Guid guildId, ClaimsPrincipal principal, AppDbContext db, CancellationToken cancel)
+    private static async Task<IResult> AcceptInvite(Guid guildId, HttpContext http, ClaimsPrincipal principal, AppDbContext db, CancellationToken cancel)
     {
         if (!SocialEndpoints.TryGetUserId(principal, out Guid me)) return Results.Unauthorized();
+        if (!GameIds.TryFromRequest(http, out string game, out IResult? bad)) return bad!;
 
         DateTime now = DateTime.UtcNow;
+        Guild? guild = await db.Guilds.FirstOrDefaultAsync(g => g.Id == guildId && g.GameId == game, cancel);
 
-        if (!await db.GuildInvites.AnyAsync(i => i.GuildId == guildId && i.UserId == me && i.ExpiresUtc > now, cancel))
+        if (guild == null || !await db.GuildInvites.AnyAsync(i => i.GuildId == guildId && i.UserId == me && i.ExpiresUtc > now, cancel))
         {
             return Results.Problem("That invitation doesn't exist or has expired.", statusCode: StatusCodes.Status404NotFound);
         }
 
-        return await AddMember(db, guildId, me, cancel);
+        return await AddMember(db, guild, me, cancel);
     }
 
     private static async Task<IResult> DeclineInvite(Guid guildId, ClaimsPrincipal principal, AppDbContext db, CancellationToken cancel)
@@ -669,11 +703,13 @@ public static partial class GuildEndpoints
 
     // ------------------------------------------------------------------ guild chat
 
-    private static async Task<IResult> ChatHistory(long? afterId, ClaimsPrincipal principal, AppDbContext db, CancellationToken cancel)
+    private static async Task<IResult> ChatHistory(long? afterId, HttpContext http, ClaimsPrincipal principal, AppDbContext db, CancellationToken cancel)
     {
         if (!SocialEndpoints.TryGetUserId(principal, out Guid me)) return Results.Unauthorized();
 
-        GuildMember? membership = await FindMembership(db, me, cancel);
+        if (!GameIds.TryFromRequest(http, out string game, out IResult? bad)) return bad!;
+
+        GuildMember? membership = await FindMembership(db, me, game, cancel);
 
         if (membership == null)
         {
@@ -694,7 +730,7 @@ public static partial class GuildEndpoints
         return Results.Ok(messages.Select(m => new GuildMessageDto(m.Id, m.SenderId, names.GetValueOrDefault(m.SenderId, "?"), m.Text, m.SentUtc)).ToList());
     }
 
-    private static async Task<IResult> ChatSend(SendMessageRequest request, ClaimsPrincipal principal, AppDbContext db, IHubContext<ChatHub> hub, CancellationToken cancel)
+    private static async Task<IResult> ChatSend(SendMessageRequest request, HttpContext http, ClaimsPrincipal principal, AppDbContext db, IHubContext<ChatHub> hub, CancellationToken cancel)
     {
         if (!SocialEndpoints.TryGetUserId(principal, out Guid me)) return Results.Unauthorized();
 
@@ -705,7 +741,9 @@ public static partial class GuildEndpoints
             return Results.ValidationProblem(new Dictionary<string, string[]> { ["text"] = new[] { $"A message must be 1-{MaxMessageLength} characters." } });
         }
 
-        GuildMember? membership = await FindMembership(db, me, cancel);
+        if (!GameIds.TryFromRequest(http, out string game, out IResult? bad)) return bad!;
+
+        GuildMember? membership = await FindMembership(db, me, game, cancel);
 
         if (membership == null)
         {
@@ -733,11 +771,13 @@ public static partial class GuildEndpoints
 
     // ------------------------------------------------------------------ bosses
 
-    private static async Task<IResult> BossChoices(ClaimsPrincipal principal, AppDbContext db, CancellationToken cancel)
+    private static async Task<IResult> BossChoices(HttpContext http, ClaimsPrincipal principal, AppDbContext db, CancellationToken cancel)
     {
         if (!SocialEndpoints.TryGetUserId(principal, out Guid me)) return Results.Unauthorized();
 
-        GuildMember? membership = await FindMembership(db, me, cancel);
+        if (!CardGameOnly(http, out string game, out IResult? bad)) return bad!;
+
+        GuildMember? membership = await FindMembership(db, me, game, cancel);
 
         if (membership == null)
         {
@@ -749,11 +789,13 @@ public static partial class GuildEndpoints
         return Results.Ok(Bosses.All.Select(b => new BossChoice(b.Key, b.Name, b.Description, b.RewardPool, b.DurationHours, HpFor(b, count))).ToList());
     }
 
-    private static async Task<IResult> CurrentBoss(ClaimsPrincipal principal, AppDbContext db, CancellationToken cancel)
+    private static async Task<IResult> CurrentBoss(HttpContext http, ClaimsPrincipal principal, AppDbContext db, CancellationToken cancel)
     {
         if (!SocialEndpoints.TryGetUserId(principal, out Guid me)) return Results.Unauthorized();
 
-        GuildMember? membership = await FindMembership(db, me, cancel);
+        if (!CardGameOnly(http, out string game, out IResult? bad)) return bad!;
+
+        GuildMember? membership = await FindMembership(db, me, game, cancel);
 
         if (membership == null)
         {
@@ -767,11 +809,13 @@ public static partial class GuildEndpoints
             : Results.Ok(boss);
     }
 
-    private static async Task<IResult> StartBoss(StartBossRequest request, ClaimsPrincipal principal, AppDbContext db, CancellationToken cancel)
+    private static async Task<IResult> StartBoss(StartBossRequest request, HttpContext http, ClaimsPrincipal principal, AppDbContext db, CancellationToken cancel)
     {
         if (!SocialEndpoints.TryGetUserId(principal, out Guid me)) return Results.Unauthorized();
 
-        GuildMember? membership = await FindMembership(db, me, cancel);
+        if (!CardGameOnly(http, out string game, out IResult? bad)) return bad!;
+
+        GuildMember? membership = await FindMembership(db, me, game, cancel);
 
         if (membership == null || membership.Role < GuildRole.Officer)
         {
@@ -826,11 +870,13 @@ public static partial class GuildEndpoints
         return Results.Ok(await BuildBossInfo(db, membership.GuildId, me, cancel));
     }
 
-    private static async Task<IResult> Attack(ClaimsPrincipal principal, AppDbContext db, CardCatalog catalog, CancellationToken cancel)
+    private static async Task<IResult> Attack(HttpContext http, ClaimsPrincipal principal, AppDbContext db, CardCatalog catalog, CancellationToken cancel)
     {
         if (!SocialEndpoints.TryGetUserId(principal, out Guid me)) return Results.Unauthorized();
 
-        GuildMember? membership = await FindMembership(db, me, cancel);
+        if (!CardGameOnly(http, out string game, out IResult? bad)) return bad!;
+
+        GuildMember? membership = await FindMembership(db, me, game, cancel);
 
         if (membership == null)
         {
@@ -956,8 +1002,29 @@ public static partial class GuildEndpoints
 
     // ------------------------------------------------------------------ helpers
 
-    private static Task<GuildMember?> FindMembership(AppDbContext db, Guid userId, CancellationToken cancel)
-        => db.GuildMembers.FirstOrDefaultAsync(m => m.UserId == userId, cancel);
+    /// <summary>The player's guild membership in ONE game (a player can be in one guild per game).</summary>
+    private static Task<GuildMember?> FindMembership(AppDbContext db, Guid userId, string gameId, CancellationToken cancel)
+        => db.GuildMembers.FirstOrDefaultAsync(m => m.UserId == userId && m.GameId == gameId, cancel);
+
+    /// <summary>
+    /// For card-game-only features (bosses, line-ups, Guild Wars): they use cards and Duel Points, which don't exist
+    /// in the walking game. Other games get a clear "not in this game" answer instead of a confusing one.
+    /// </summary>
+    private static bool CardGameOnly(HttpContext http, out string gameId, out IResult? problem)
+    {
+        if (!GameIds.TryFromRequest(http, out gameId, out problem))
+        {
+            return false;
+        }
+
+        if (gameId != GameIds.Yugioh)
+        {
+            problem = Results.Problem("That guild feature isn't part of this game.", statusCode: StatusCodes.Status404NotFound);
+            return false;
+        }
+
+        return true;
+    }
 
     private static int HpFor(BossDefinition definition, int members) => definition.HpPerMember * Math.Max(3, members);
 
