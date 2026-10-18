@@ -54,6 +54,7 @@ public class AppDbContext : DbContext
     public DbSet<MonsterSpeciesCount> MonsterSpeciesCounts => Set<MonsterSpeciesCount>();
     public DbSet<WalkingLedgerEntry> WalkingLedger => Set<WalkingLedgerEntry>();
     public DbSet<MonsterOffer> MonsterOffers => Set<MonsterOffer>();
+    public DbSet<WalkingRoute> WalkingRoutes => Set<WalkingRoute>();
 
     // SQLite doesn't remember that a date is UTC, so we put the "UTC" label back
     // whenever we read one. Otherwise clients would see dates without the trailing Z.
@@ -337,6 +338,15 @@ public class AppDbContext : DbContext
             o.HasIndex(x => new { x.FromUserId, x.Status });
             o.HasIndex(x => new { x.MonsterId, x.Status });
             o.HasOne<WalkingMonster>().WithMany().HasForeignKey(x => x.MonsterId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        model.Entity<WalkingRoute>(r =>
+        {
+            r.HasKey(x => x.Id);
+            r.Property(x => x.Kind).HasMaxLength(16).IsRequired();
+            r.Property(x => x.Biome).HasMaxLength(32);
+            r.HasIndex(x => new { x.UserId, x.Status });
+            r.HasOne<User>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
         });
 
         model.Entity<MonsterSpeciesCount>(c =>

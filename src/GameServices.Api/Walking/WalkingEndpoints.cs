@@ -3,6 +3,7 @@ using GameServices.Api.Chat;
 using GameServices.Api.Data;
 using GameServices.Api.Social;
 using GameServices.Api.Walking.Monsters;
+using GameServices.Api.Walking.Routes;
 using GameServices.Api.Walking.Wallet;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
@@ -91,6 +92,9 @@ public static class WalkingEndpoints
         group.MapWalkingPackEndpoints();
         group.MapMonsterOfferEndpoints();
         group.MapWalkingWalletEndpoints();
+
+        // Safe walking loops with bonus rewards (Walking/Routes).
+        group.MapRouteEndpoints();
 
         group.MapGet("/races", MyRaces);
         group.MapPost("/races", Challenge);

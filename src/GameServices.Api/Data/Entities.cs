@@ -651,3 +651,38 @@ public class MonsterOffer
     public DateTime ExpiresUtc { get; set; }
     public DateTime? DecidedUtc { get; set; }
 }
+
+public enum RouteStatus { Active = 0, Completed = 1, Abandoned = 2, Expired = 3 }
+
+/// <summary>A safe walking loop planned for one walker (see Walking/Routes).</summary>
+public class WalkingRoute
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid UserId { get; set; }
+
+    /// <summary>"short", "medium", "long" or "challenge".</summary>
+    public string Kind { get; set; } = "";
+    public int TargetMetres { get; set; }
+    public int Metres { get; set; }
+
+    /// <summary>Share of the route on footpaths and quiet streets (0-1), and how many stretches run beside busier roads.</summary>
+    public double QuietShare { get; set; }
+    public int BusyStretches { get; set; }
+
+    /// <summary>The way to walk and the checkpoints, as JSON lists of [lat, lon].</summary>
+    public string PathJson { get; set; } = "[]";
+    public string CheckpointsJson { get; set; } = "[]";
+
+    public int NextCheckpoint { get; set; }
+    public RouteStatus Status { get; set; } = RouteStatus.Active;
+    public DateTime StartedUtc { get; set; } = DateTime.UtcNow;
+    public DateTime LastCheckpointUtc { get; set; } = DateTime.UtcNow;
+    public DateTime ExpiresUtc { get; set; }
+    public DateTime? CompletedUtc { get; set; }
+
+    /// <summary>The walker's lifetime steps when the route began (the finish checks the steps add up).</summary>
+    public long StepsAtStart { get; set; }
+    public string? Biome { get; set; }
+    public int RewardGlimmer { get; set; }
+    public bool RewardMonster { get; set; }
+}

@@ -104,6 +104,40 @@ The server is the only place they're made, so nobody can give themselves a Legen
 The species list comes from Unity (`Wanderkin > Export Monster Catalog`, to `Walking/monster-catalog.json`). The
 odds live under `Monsters` in `appsettings.json`.
 
+## Safe routes (`/api/walking/routes`)
+
+Walking loops planned by the server along the safest, nicest ways near the walker, with bonus rewards.
+
+**Planning:** the map squares the relay already keeps become a walking network (`Walking/Routes/RouteGraph.cs`). Each
+stretch costs its length multiplied by a safety factor:
+
+| Kind of way | Factor |
+|---|---|
+| Footpaths, park paths, pedestrian and living streets | 1.0 |
+| Tracks, bridleways, cycle paths, steps | 1.2 to 1.5 |
+| Quiet residential streets | 1.6 (1.2 with a pavement) |
+| Tertiary roads | 3.5 (2.2 with a pavement) |
+| Secondary roads | 6.0 (3.0 with a pavement) |
+| Main roads with a pavement | 5.0 |
+| Main roads without a pavement, motorways, private paths, "no walking" | never used |
+
+Lit ways get 10% off. The planner (`RoutePlanner.cs`) picks two turning points in a random direction and finds the
+cheapest way out and back, with stretches already used made more expensive so it's a real loop. It tries a dozen times
+and keeps the closest to the asked-for length on the quietest ways. Checkpoints go every few hundred metres; the last
+one is back at the start. If a map square isn't cached yet, it starts downloading and the walker is asked to try again
+shortly (503).
+
+| Route | Length | Reward |
+|---|---|---|
+| Short | 1 km | 40 Glimmer |
+| Medium | 3 km | 120 Glimmer + a 15% chance of a monster |
+| Long | 5 km | 220 Glimmer + a 30% chance of a monster (Uncommon or rarer) |
+| Weekly challenge | 5 km | 300 Glimmer + a guaranteed monster (Rare or rarer), daylight only (7am to 7pm) |
+
+Two Short, Medium or Long rewards a day; one challenge a week; a route stays open for 4 hours. A reward needs every
+checkpoint reached in order, within 40 m, no faster than a jog between them (`Routes:MaxMetresPerSecond`), and steps that
+add up to the distance (the finish waits for the next step report if they haven't arrived yet).
+
 ## Walking Glimmer, packs and offers (`/api/walking/wallet`, `/packs`, `/offers`)
 
 **Glimmer lives on the server**, so packs and offers can't be paid for with made-up Glimmer. Walking earns it here

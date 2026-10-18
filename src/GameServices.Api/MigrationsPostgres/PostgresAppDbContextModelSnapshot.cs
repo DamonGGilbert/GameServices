@@ -1315,6 +1315,78 @@ namespace GameServices.Api.MigrationsPostgres
                     b.ToTable("WalkingProfiles");
                 });
 
+            modelBuilder.Entity("GameServices.Api.Data.WalkingRoute", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Biome")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<int>("BusyStretches")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("CheckpointsJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("CompletedUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("ExpiresUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<DateTime>("LastCheckpointUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Metres")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("NextCheckpoint")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("PathJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<double>("QuietShare")
+                        .HasColumnType("double precision");
+
+                    b.Property<int>("RewardGlimmer")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("RewardMonster")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime>("StartedUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<long>("StepsAtStart")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("TargetMetres")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "Status");
+
+                    b.ToTable("WalkingRoutes");
+                });
+
             modelBuilder.Entity("GameServices.Api.Data.BossContribution", b =>
                 {
                     b.HasOne("GameServices.Api.Data.GuildBoss", null)
@@ -1625,6 +1697,15 @@ namespace GameServices.Api.MigrationsPostgres
                 });
 
             modelBuilder.Entity("GameServices.Api.Data.WalkingProfile", b =>
+                {
+                    b.HasOne("GameServices.Api.Data.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("GameServices.Api.Data.WalkingRoute", b =>
                 {
                     b.HasOne("GameServices.Api.Data.User", null)
                         .WithMany()

@@ -64,6 +64,20 @@ public sealed class MapTileStore
         return await shared.Value;
     }
 
+    /// <summary>
+    /// A square only if it's already on disk (any age) - never waits for Overpass. Route planning uses this, and
+    /// calls Warm() for the squares it's missing so they're there next time.
+    /// </summary>
+    public async Task<string?> ReadCachedJsonAsync(int x, int y)
+    {
+        string path = PathFor(x, y);
+        if (!File.Exists(path)) return null;
+        return System.Text.Encoding.UTF8.GetString(Gunzip(await File.ReadAllBytesAsync(path)));
+    }
+
+    /// <summary>Starts fetching a square in the background (if it isn't fresh on disk already).</summary>
+    public void Warm(int x, int y) => _ = GetAsync(x, y);
+
     private async Task<MapTile?> FetchAndSave(int x, int y, string path)
     {
         try
