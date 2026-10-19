@@ -128,6 +128,7 @@ public static class WalkingEndpoints
 
         string day = request.Day.Trim();
         WalkingDay? row = await db.WalkingDays.FirstOrDefaultAsync(d => d.UserId == me && d.Day == day, cancel);
+        DateTime? dayLastReported = row?.UpdatedUtc;
 
         if (row == null)
         {
@@ -135,7 +136,9 @@ public static class WalkingEndpoints
             db.WalkingDays.Add(row);
         }
 
-        StepVerdict verdict = StepRules.Evaluate(row.Steps, profile.LastReportUtc, request.Steps, now, dayStart.Value);
+        // Each day is judged on its own time: from when THIS day was last reported (so finishing yesterday after
+        // today's reports still works) up to its midnight.
+        StepVerdict verdict = StepRules.Evaluate(row.Steps, dayLastReported, request.Steps, now, dayStart.Value);
 
         row.Steps = verdict.AcceptedToday;
         row.RejectedSteps += verdict.Rejected;

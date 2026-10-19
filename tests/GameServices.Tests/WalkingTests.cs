@@ -70,6 +70,8 @@ public class WalkingTests : IClassFixture<ApiFactory>
         AppDbContext db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         WalkingProfile profile = await db.WalkingProfiles.FirstAsync(x => x.UserId == p.Id);
         profile.LastReportUtc = profile.LastReportUtc!.Value - by;
+        // Each day is judged on its own last report, so that moves back too.
+        foreach (WalkingDay day in db.WalkingDays.Where(d => d.UserId == p.Id)) day.UpdatedUtc -= by;
         await db.SaveChangesAsync();
     }
 
@@ -90,6 +92,38 @@ public class WalkingTests : IClassFixture<ApiFactory>
         Assert.Equal(3200, me.Today);
         Assert.Equal(3200, me.Week);
         Assert.Equal(3200, me.Lifetime);
+    }
+
+    [Fact]
+    public async Task Yesterday_can_be_finished_after_todays_reports()
+    {
+        Player walker = await NewPlayer();
+        (string today, int offset) = Midday();
+        string yesterday = DateTime.ParseExact(today, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture).AddDays(-1).ToString("yyyy-MM-dd");
+
+        Assert.Equal(HttpStatusCode.OK, (await Report(walker, 1000)).StatusCode);
+        await RewindLastReport(walker, TimeSpan.FromMinutes(1));
+
+        // The phone's step history found 8,000 steps for yesterday that were never reported.
+        HttpResponseMessage response = await walker.Http.PostAsJsonAsync("/api/walking/steps", new StepReportRequest(yesterday, 8000, offset));
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        StepReportResult result = (await response.Content.ReadFromJsonAsync<StepReportResult>())!;
+        Assert.Equal(8000, result.AcceptedToday);   // "today" here means the day that was reported - yesterday
+        Assert.Equal(9000, result.LifetimeSteps);
+
+        WalkingMeDto me = (await walker.Http.GetFromJsonAsync<WalkingMeDto>("/api/walking/me"))!;
+        Assert.Equal(1000, me.Today);   // today is untouched
+    }
+
+    [Fact]
+    public async Task Two_days_ago_cant_be_reported()
+    {
+        Player walker = await NewPlayer();
+        (string today, int offset) = Midday();
+        string twoDaysAgo = DateTime.ParseExact(today, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture).AddDays(-2).ToString("yyyy-MM-dd");
+
+        HttpResponseMessage response = await walker.Http.PostAsJsonAsync("/api/walking/steps", new StepReportRequest(twoDaysAgo, 8000, offset));
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     [Fact]

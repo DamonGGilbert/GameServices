@@ -69,6 +69,7 @@ public class WalkingTradeTests : IClassFixture<ApiFactory>
     {
         WalkingMonster m = await db.WalkingMonsters.FirstAsync(x => x.Id == monsterId);
         m.AcquiredUtc = DateTime.UtcNow.AddDays(-4);
+        m.FoundUtc = DateTime.UtcNow.AddDays(-4);
     });
 
     private static Task<HttpResponseMessage> Offer(Player buyer, Guid monsterId, int price) =>
@@ -264,5 +265,29 @@ public class WalkingTradeTests : IClassFixture<ApiFactory>
         WalkingMonsterDto after = await Starter(p);
         Assert.Equal(100, after.Level);
         Assert.Equal(0, after.TrainedPower + after.TrainedGuard + after.TrainedTricks + after.TrainedWits);
+    }
+
+    [Fact]
+    public async Task Training_is_one_point_a_day_by_the_servers_clock()
+    {
+        Player p = await NewPlayer();
+        WalkingMonsterDto monster = await Starter(p);   // found today: one point at most
+
+        await p.Http.PutAsJsonAsync("/api/walking/monsters/progress",
+            new ProgressRequest(null, new List<MonsterProgressDto> { new(monster.Id, 1, 0, 1, 0, 0, 0, 3000) }));
+        Assert.Equal(1, (await Starter(p)).TrainedPower);
+
+        // Five points on its first day (say, after moving the phone's date on): not taken - the one point stays.
+        await p.Http.PutAsJsonAsync("/api/walking/monsters/progress",
+            new ProgressRequest(null, new List<MonsterProgressDto> { new(monster.Id, 1, 0, 3, 2, 0, 0, 3000) }));
+        WalkingMonsterDto after = await Starter(p);
+        Assert.Equal(1, after.TrainedPower + after.TrainedGuard + after.TrainedTricks + after.TrainedWits);
+
+        // Four days on, five points are believable.
+        await Settle(monster.Id);
+        await p.Http.PutAsJsonAsync("/api/walking/monsters/progress",
+            new ProgressRequest(null, new List<MonsterProgressDto> { new(monster.Id, 1, 0, 3, 2, 0, 0, 3000) }));
+        after = await Starter(p);
+        Assert.Equal(5, after.TrainedPower + after.TrainedGuard);
     }
 }

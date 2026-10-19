@@ -33,7 +33,7 @@ public sealed class MonsterCatalog
         public string Element { get; init; } = "";
         public double SpawnWeight { get; init; }
         public int MinTier { get; init; }
-        public int MaxTier { get; init; } = 6;
+        public int MaxTier { get; init; } = 4;
         public bool Wild { get; init; }
         public List<string> FavouredBiomes { get; init; } = new();
     }

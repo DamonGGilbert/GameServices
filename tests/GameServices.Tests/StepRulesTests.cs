@@ -65,6 +65,18 @@ public class StepRulesTests
     }
 
     [Fact]
+    public void Finishing_yesterday_only_counts_time_before_its_midnight()
+    {
+        // Yesterday was last reported at 23:50. Reported again at 09:00 the next morning, only those last 10 minutes
+        // of yesterday can hold new steps - not the 9 hours since.
+        DateTime last = Midnight.AddHours(23).AddMinutes(50);
+        StepVerdict v = StepRules.Evaluate(7000, last, 30000, Midnight.AddDays(1).AddHours(9), Midnight);
+
+        Assert.Equal((10 * StepRules.MaxStepsPerMinute) + StepRules.SlackSteps, v.Added);
+        Assert.True(v.Flagged);
+    }
+
+    [Fact]
     public void Only_today_in_the_players_own_time_zone_is_accepted()
     {
         DateTime now = new(2026, 10, 16, 23, 30, 0, DateTimeKind.Utc);
@@ -73,8 +85,11 @@ public class StepRulesTests
         Assert.NotNull(StepRules.DayStartUtc("2026-10-17", 60, now));
         Assert.Null(StepRules.DayStartUtc("2026-10-15", 60, now));
 
-        // The 16th, a little after midnight: still allowed for a short while (the last steps of the evening).
+        // The 16th, a little after midnight: still allowed (yesterday can be finished all through today).
         Assert.NotNull(StepRules.DayStartUtc("2026-10-16", 60, now));
+
+        // ...but not the day after that.
+        Assert.Null(StepRules.DayStartUtc("2026-10-16", 60, now.AddDays(1)));
 
         Assert.Null(StepRules.DayStartUtc("16/10/2026", 0, now));
         Assert.Null(StepRules.DayStartUtc("2026-10-16", 20 * 60, now)); // no time zone is UTC+20

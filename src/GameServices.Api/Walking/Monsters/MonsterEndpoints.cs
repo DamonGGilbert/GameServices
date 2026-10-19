@@ -84,10 +84,20 @@ public static class MonsterEndpoints
             int maxPoints = 10 + (int)Math.Round(m.Potential * 0.4);
             m.Level = Math.Clamp(p.Level, 1, 100);
             m.Experience = Math.Max(0, p.Experience);
-            m.TrainedPower = Math.Max(0, p.TrainedPower);
-            m.TrainedGuard = Math.Max(0, p.TrainedGuard);
-            m.TrainedTricks = Math.Max(0, p.TrainedTricks);
-            m.TrainedWits = Math.Max(0, p.TrainedWits);
+
+            // Training is one point a day, so a monster can't have more points than days since it was found (plus
+            // today). The server's own clock decides that, so changing the phone's date doesn't help. A claim that
+            // breaks the rule is simply not taken - the points saved before stay as they were.
+            int before = m.TrainedPower + m.TrainedGuard + m.TrainedTricks + m.TrainedWits;
+            int claimed = Math.Max(0, p.TrainedPower) + Math.Max(0, p.TrainedGuard) + Math.Max(0, p.TrainedTricks) + Math.Max(0, p.TrainedWits);
+            int daysOwned = (int)(DateTime.UtcNow - m.FoundUtc).TotalDays + 1;
+            if (claimed <= before || claimed <= Math.Min(maxPoints, daysOwned))
+            {
+                m.TrainedPower = Math.Max(0, p.TrainedPower);
+                m.TrainedGuard = Math.Max(0, p.TrainedGuard);
+                m.TrainedTricks = Math.Max(0, p.TrainedTricks);
+                m.TrainedWits = Math.Max(0, p.TrainedWits);
+            }
             if (m.TrainedPower + m.TrainedGuard + m.TrainedTricks + m.TrainedWits > maxPoints)
             {
                 m.TrainedPower = m.TrainedGuard = m.TrainedTricks = m.TrainedWits = 0;   // more than is possible: not believed

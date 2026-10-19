@@ -11,6 +11,9 @@ public readonly record struct StepVerdict(int AcceptedToday, int Added, int Reje
 ///     (or the start of the day) you can gain at most MaxStepsPerMinute x minutes, plus a little slack for clocks.
 ///   * DAILY CAP: at most MaxStepsPerDay in one day - plenty for a very long hike, impossible to farm.
 ///   * NO GOING BACKWARDS: a lower number than before (a phone restart, a duplicate) changes nothing.
+///   * FINISHING YESTERDAY: yesterday's total may be reported again for the whole of today (steps walked late in the
+///     evening with the game closed, or synced later from a watch). Each day only counts time INSIDE that day -
+///     from that day's last report up to its midnight - so nothing can be added to yesterday that wasn't walked then.
 ///
 /// Steps over the limit are not added (they are "rejected"); a big rejection is FLAGGED so it can be looked at.
 /// Pure maths with no database, so it is easy to test.
@@ -32,12 +35,13 @@ public static class StepRules
     /// <summary>Time zones run from UTC-12 to UTC+14.</summary>
     public const int MaxUtcOffsetMinutes = 14 * 60;
 
-    /// <summary>A report for "today" may arrive a little after midnight (the last steps of the evening).</summary>
-    public static readonly TimeSpan LateReportGrace = TimeSpan.FromHours(2);
+    /// <summary>A day may still be reported for this long after its midnight (finishing yesterday).</summary>
+    public static readonly TimeSpan LateReportGrace = TimeSpan.FromHours(24);
 
     /// <summary>
-    /// Checks a report. previousToday = what we had already accepted for this day; lastReportUtc = the player's last
-    /// accepted report (any day), or null; dayStartUtc = midnight of that day in the player's time zone, as UTC.
+    /// Checks a report. previousToday = what we had already accepted for this day; lastReportUtc = when this day was
+    /// last reported (an earlier time is fine - only time inside the day counts), or null; dayStartUtc = midnight of
+    /// that day in the player's time zone, as UTC.
     /// </summary>
     public static StepVerdict Evaluate(int previousToday, DateTime? lastReportUtc, int reportedToday, DateTime nowUtc, DateTime dayStartUtc)
     {
@@ -50,9 +54,11 @@ public static class StepRules
 
         int claimed = reportedToday - previous;
 
-        // How long could they have been walking since we last heard from them (but not before the day began)?
+        // How long could they have been walking since we last heard about this day - but only within the day itself?
         DateTime windowStart = lastReportUtc.HasValue && lastReportUtc.Value > dayStartUtc ? lastReportUtc.Value : dayStartUtc;
-        double minutes = Math.Max(0, (nowUtc - windowStart).TotalMinutes);
+        DateTime dayEndUtc = dayStartUtc.AddDays(1);
+        DateTime windowEnd = nowUtc < dayEndUtc ? nowUtc : dayEndUtc;
+        double minutes = Math.Max(0, (windowEnd - windowStart).TotalMinutes);
         long possible = (long)Math.Ceiling(minutes * MaxStepsPerMinute) + SlackSteps;
 
         int added = (int)Math.Min(Math.Min(claimed, possible), MaxStepsPerDay - previous);

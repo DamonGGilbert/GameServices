@@ -36,7 +36,10 @@ var app = builder.Build();
 // every machine - your PC, a test, the production server - ends up with the same structure.
 using (var scope = app.Services.CreateScope())
 {
-    scope.ServiceProvider.GetRequiredService<AppDbContext>().Database.Migrate();
+    AppDbContext startupDb = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    startupDb.Database.Migrate();
+    // Monsters made under older rules (e.g. seven rarities, before there were five) brought up to date, once.
+    GameServices.Api.Walking.Monsters.MonsterRulesUpgrade.Run(startupDb);
 }
 
 // Admin commands (run on the server machine): dotnet run -- reset-password SomeUser

@@ -68,9 +68,9 @@ public static class SeedUtility
 /// <summary>The game's potential rule (Monsters/CompanionTraining.cs), worked out the same way here.</summary>
 public static class MonsterPotential
 {
-    public const int PotentialPerRarityTier = 6;
+    public const int PotentialPerRarityTier = 9;
 
-    /// <summary>Hidden potential 1-100: two dice averaged, plus 6 for each rarity tier.</summary>
+    /// <summary>Hidden potential 1-100: two dice averaged, plus 9 for each rarity tier (Legendary +36).</summary>
     public static int For(long seed, int rarityTier)
     {
         var rng = new DeterministicRandom(SeedUtility.Derive(seed, "potential"));

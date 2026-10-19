@@ -76,6 +76,8 @@ public class WalkingMonsterTests : IClassFixture<LuckyMonsterFactory>
         AppDbContext db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         WalkingProfile profile = await db.WalkingProfiles.FirstAsync(x => x.UserId == p.Id);
         profile.LastReportUtc = profile.LastReportUtc!.Value.AddMinutes(-30);
+        // Each day is judged on its own last report, so that moves back too.
+        foreach (WalkingDay day in db.WalkingDays.Where(d => d.UserId == p.Id)) day.UpdatedUtc = day.UpdatedUtc.AddMinutes(-30);
         await db.SaveChangesAsync();
     }
 
@@ -86,18 +88,60 @@ public class WalkingMonsterTests : IClassFixture<LuckyMonsterFactory>
 
     [Theory]
     [InlineData(1L, 0, 53)]
-    [InlineData(1L, 3, 71)]
-    [InlineData(1L, 6, 89)]
+    [InlineData(1L, 3, 80)]
+    [InlineData(1L, 4, 89)]
     [InlineData(42L, 0, 61)]
-    [InlineData(42L, 6, 97)]
+    [InlineData(42L, 4, 97)]
     [InlineData(-7L, 0, 53)]
     [InlineData(123456789012345L, 0, 43)]
-    [InlineData(123456789012345L, 3, 61)]
-    [InlineData(long.MaxValue, 6, 75)]
+    [InlineData(123456789012345L, 3, 70)]
+    [InlineData(long.MaxValue, 4, 75)]
     public void Potential_matches_the_game_exactly(long seed, int tier, int expected)
     {
         // Expected values were worked out by the game itself (CompanionTraining.Potential in Unity).
         Assert.Equal(expected, MonsterPotential.For(seed, tier));
+    }
+
+    [Fact]
+    public void The_catalog_has_five_rarities_under_the_current_rules()
+    {
+        MonsterFinder finder = factory.Services.GetRequiredService<MonsterFinder>();
+        Assert.Equal(MonsterRulesUpgrade.CurrentRulesVersion, finder.Catalog.RulesVersion);
+        Assert.Equal(new[] { 0, 1, 2, 3, 4 }, finder.Catalog.Rarities.Select(r => r.Tier).ToArray());
+        Assert.All(finder.Catalog.Species, s => Assert.InRange(s.MaxTier, s.MinTier, 4));
+    }
+
+    [Theory]
+    [InlineData(0, 0)]
+    [InlineData(2, 2)]
+    [InlineData(3, 3)]   // Super Rare -> Epic
+    [InlineData(4, 3)]   // Ultra Rare -> Epic
+    [InlineData(5, 4)]   // Mythic -> Legendary
+    [InlineData(6, 4)]   // Legendary stays Legendary
+    public void Seven_rarities_become_five(int oldTier, int newTier) => Assert.Equal(newTier, MonsterRulesUpgrade.TierFromVersion2(oldTier));
+
+    [Fact]
+    public async Task Monsters_from_the_old_rules_are_brought_up_to_date()
+    {
+        Player p = await NewPlayer();
+        WalkingMonsterDto starter = Assert.Single(await Monsters(p));
+
+        using (IServiceScope scope = factory.Services.CreateScope())
+        {
+            AppDbContext db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            WalkingMonster m = await db.WalkingMonsters.FirstAsync(x => x.Id == starter.Id);
+            m.RarityTier = 5;          // a Mythic, from when there were seven
+            m.RulesVersion = 2;
+            m.Potential = 1;
+            await db.SaveChangesAsync();
+
+            Assert.True(MonsterRulesUpgrade.Run(db) >= 1);
+        }
+
+        WalkingMonsterDto after = Assert.Single(await Monsters(p));
+        Assert.Equal(4, after.RarityTier);
+        Assert.Equal(3, after.RulesVersion);
+        Assert.Equal(MonsterPotential.For(after.Seed, 4), after.Potential);
     }
 
     // ------------------------------------------------------------------ the starter
@@ -147,7 +191,7 @@ public class WalkingMonsterTests : IClassFixture<LuckyMonsterFactory>
         WalkingMonsterDto found = monsters.Single(m => m.Source == "walk");
         Assert.False(found.Seen);
         Assert.Equal("coastal", found.BiomeId);
-        Assert.InRange(found.RarityTier, 0, 6);
+        Assert.InRange(found.RarityTier, 0, 4);
         Assert.Equal(MonsterPotential.For(found.Seed, found.RarityTier), found.Potential);
     }
 

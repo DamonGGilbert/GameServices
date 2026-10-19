@@ -37,12 +37,12 @@ public static class MonsterOffers
     public const int MaxTradesPerWeek = 3;
     public const int MaxOpenOffers = 5;
 
-    // Price limits by rarity tier: Common, Uncommon, Rare, Super Rare, Ultra Rare, Mythic, Legendary.
-    private static readonly int[] MinPrices = { 50, 100, 200, 500, 1000, 3000, 5000 };
-    private static readonly int[] MaxPrices = { 500, 1000, 2500, 6000, 15000, 40000, 100000 };
+    // Price limits by rarity tier: Common, Uncommon, Rare, Epic, Legendary.
+    private static readonly int[] MinPrices = { 50, 100, 200, 1000, 5000 };
+    private static readonly int[] MaxPrices = { 500, 1000, 2500, 15000, 100000 };
 
-    public static int MinPrice(int tier) => MinPrices[Math.Clamp(tier, 0, 6)];
-    public static int MaxPrice(int tier) => MaxPrices[Math.Clamp(tier, 0, 6)];
+    public static int MinPrice(int tier) => MinPrices[Math.Clamp(tier, 0, MinPrices.Length - 1)];
+    public static int MaxPrice(int tier) => MaxPrices[Math.Clamp(tier, 0, MaxPrices.Length - 1)];
 
     public static RouteGroupBuilder MapMonsterOfferEndpoints(this RouteGroupBuilder group)
     {
