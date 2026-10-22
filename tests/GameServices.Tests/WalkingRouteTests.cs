@@ -207,6 +207,36 @@ public class WalkingRouteTests : IClassFixture<RouteApiFactory>
         Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
     }
 
+    [Fact]
+    public async Task A_route_is_planned_when_most_of_the_map_is_ready()
+    {
+        // The public map servers are often busy: a far corner of the area still downloading mustn't stop a route.
+        string folder = Path.Combine(factory.CacheFolder, "v" + MapQuery.Version);
+        // The north-west corner of the area a medium route reads (the same sums as RouteEndpoints).
+        double radius = 3000 / 3.9 * 1.3 + 400;
+        double lat = RouteApiFactory.StartLat + radius / 110540.0;
+        double lon = RouteApiFactory.StartLon - radius / (111320.0 * Math.Cos(RouteApiFactory.StartLat * Math.PI / 180.0));
+        double n = 1 << MapQuery.Zoom;
+        int x0 = (int)Math.Floor((lon + 180.0) / 360.0 * n);
+        double latRad = lat * Math.PI / 180.0;
+        int y0 = (int)Math.Floor((1 - Math.Log(Math.Tan(latRad) + 1 / Math.Cos(latRad)) / Math.PI) / 2 * n);
+        string corner = Path.Combine(folder, $"{MapQuery.Zoom}_{x0}_{y0}.json.gz");
+        string aside = corner + ".aside";
+        File.Move(corner, aside);
+
+        try
+        {
+            Player p = await NewPlayer();
+            HttpResponseMessage response = await p.Http.PostAsJsonAsync("/api/walking/routes",
+                new RoutePlanRequest("medium", RouteApiFactory.StartLat, RouteApiFactory.StartLon, 0));
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        }
+        finally
+        {
+            File.Move(aside, corner, overwrite: true);
+        }
+    }
+
     // ------------------------------------------------------------------ walking it
 
     [Fact]

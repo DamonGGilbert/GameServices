@@ -123,9 +123,20 @@ public static class RouteEndpoints
             else { missing++; tiles.Warm(x, y); }
         }
 
-        if (missing > 0)
+        // The public map servers are run by volunteers and are often slow or busy, so a route doesn't wait for every last
+        // square: once the squares right around you and most of the rest are here, it plans with what there is (the
+        // missing ones keep downloading for next time). A loop only ever uses paths the map really has.
+        (int startX, int startY) = Square(request.Lat, request.Lon);
+        int nearbyMissing = 0;
+        for (int dy = -1; dy <= 1; dy++)
+            for (int dx = -1; dx <= 1; dx++)
+                if (squares.Contains((startX + dx, startY + dy)) && await tiles.ReadCachedJsonAsync(startX + dx, startY + dy) == null) nearbyMissing++;
+
+        if (nearbyMissing > 0 || missing > squares.Count * MaxMissingShare)
         {
-            return Results.Problem("Getting the map for this area ready - try again in a minute.", statusCode: StatusCodes.Status503ServiceUnavailable,
+            int ready = squares.Count - missing;
+            return Results.Problem($"Getting the map for this area ready ({ready} of {squares.Count} pieces so far) - try again in a minute.",
+                statusCode: StatusCodes.Status503ServiceUnavailable,
                 extensions: new Dictionary<string, object?> { ["retryAfterSeconds"] = 30 });
         }
 
@@ -277,6 +288,9 @@ public static class RouteEndpoints
     }
 
     // Zoom-15 squares covering a circle around a point.
+    /// <summary>A route is planned once at most this share of the map around you is still downloading.</summary>
+    public const double MaxMissingShare = 0.25;
+
     private static List<(int X, int Y)> SquaresAround(double lat, double lon, double radiusMetres)
     {
         double dLat = radiusMetres / 110540.0;
