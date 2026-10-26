@@ -1307,6 +1307,28 @@ namespace GameServices.Api.MigrationsPostgres
                     b.Property<bool>("ShareSteps")
                         .HasColumnType("boolean");
 
+                    b.Property<int>("TogetherBonusToday")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("TogetherCellX")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("TogetherCellY")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("TogetherDay")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("TogetherDaysTotal")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("TogetherSeenUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("TogetherStepRemainder")
+                        .HasColumnType("integer");
+
                     b.Property<bool>("WalletStarted")
                         .HasColumnType("boolean");
 

@@ -1296,6 +1296,28 @@ namespace GameServices.Api.Migrations
                     b.Property<bool>("ShareSteps")
                         .HasColumnType("INTEGER");
 
+                    b.Property<int>("TogetherBonusToday")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("TogetherCellX")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("TogetherCellY")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("TogetherDay")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("TogetherDaysTotal")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime?>("TogetherSeenUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("TogetherStepRemainder")
+                        .HasColumnType("INTEGER");
+
                     b.Property<bool>("WalletStarted")
                         .HasColumnType("INTEGER");
 

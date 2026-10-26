@@ -11,10 +11,12 @@ using Microsoft.EntityFrameworkCore;
 namespace GameServices.Api.Walking;
 
 /// <summary>Biome: the kind of place the walker is mostly in ("park", "coastal"...), so a find can suit it. Optional.</summary>
-public record StepReportRequest(string Day, int Steps, int UtcOffsetMinutes, string? Biome = null);
+/// <summary>ShareArea + Lat/Lon (rounded by the phone): only sent when the walker has "Walk with friends" switched on.</summary>
+public record StepReportRequest(string Day, int Steps, int UtcOffsetMinutes, string? Biome = null, bool ShareArea = false, double Lat = 0, double Lon = 0);
 
 /// <summary>NewFinds: monsters found on this walk (fetch them from /api/walking/monsters and reveal them).</summary>
-public record StepReportResult(int AcceptedToday, int Added, int Rejected, long LifetimeSteps, bool Flagged, string Message, int NewFinds = 0);
+public record StepReportResult(int AcceptedToday, int Added, int Rejected, long LifetimeSteps, bool Flagged, string Message, int NewFinds = 0,
+    List<string>? WalkingWith = null, int TogetherBonus = 0, int TogetherDays = 0);
 
 public record WalkingMeDto(int Today, int Week, long Lifetime, bool ShareSteps, int RacesWon, int RacesLost);
 
@@ -158,6 +160,12 @@ public static class WalkingEndpoints
         string? biome = string.IsNullOrWhiteSpace(request.Biome) ? null : request.Biome.Trim().ToLowerInvariant();
         int newFinds = verdict.Added > 0 ? await MonsterEndpoints.RollFinds(db, finder, me, profile, verdict.Added, day, biome, cancel) : 0;
 
+        // Walking with a friend right now? +25% Glimmer on these steps (only for today's walking, not finishing yesterday).
+        bool isToday = StepRules.DayStartUtc(day, request.UtcOffsetMinutes, now) is DateTime start && now < start.AddDays(1);
+        TogetherResult together = await WalkTogether.ApplyAsync(db, profile,
+            request.ShareArea && isToday ? request.Lat : null, request.ShareArea && isToday ? request.Lon : null,
+            isToday ? verdict.Added : 0, day, now, cancel);
+
         try
         {
             await db.SaveChangesAsync(cancel);
@@ -172,7 +180,8 @@ public static class WalkingEndpoints
             ? $"{verdict.Rejected:N0} steps couldn't be counted (more than anyone can walk in that time)."
             : "";
 
-        return Results.Ok(new StepReportResult(verdict.AcceptedToday, verdict.Added, verdict.Rejected, profile.LifetimeSteps, verdict.Flagged, message, newFinds));
+        return Results.Ok(new StepReportResult(verdict.AcceptedToday, verdict.Added, verdict.Rejected, profile.LifetimeSteps, verdict.Flagged, message, newFinds,
+            together.WalkingWith, together.Bonus, together.DaysTotal));
     }
 
     private static async Task<IResult> Me(ClaimsPrincipal principal, AppDbContext db, CancellationToken cancel)

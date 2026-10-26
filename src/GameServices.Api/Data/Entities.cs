@@ -471,6 +471,18 @@ public class WalkingProfile
 
     /// <summary>The monster this walker walks with (it can't be offered for).</summary>
     public Guid? CompanionMonsterId { get; set; }
+
+    // ---- Walk with friends (see Walking/WalkTogether) ----
+    /// <summary>The ~100 m square of the last report that added steps - only kept while the walker has it switched on.</summary>
+    public int? TogetherCellX { get; set; }
+    public int? TogetherCellY { get; set; }
+    /// <summary>When that was (null = not walking with the feature on right now).</summary>
+    public DateTime? TogetherSeenUtc { get; set; }
+    public int TogetherStepRemainder { get; set; }
+    public string TogetherDay { get; set; } = "";
+    public int TogetherBonusToday { get; set; }
+    /// <summary>Days on which this walker walked with a friend.</summary>
+    public int TogetherDaysTotal { get; set; }
 }
 
 /// <summary>Accepted steps for one player on one day (the player's own calendar day, "yyyy-MM-dd").</summary>
