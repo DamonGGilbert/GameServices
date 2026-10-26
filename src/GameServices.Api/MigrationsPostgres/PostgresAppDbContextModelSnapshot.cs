@@ -898,10 +898,16 @@ namespace GameServices.Api.MigrationsPostgres
                     b.Property<Guid>("AttackerMonsterId")
                         .HasColumnType("uuid");
 
+                    b.Property<int>("AttackerPointsChange")
+                        .HasColumnType("integer");
+
                     b.Property<int>("AttackerPower")
                         .HasColumnType("integer");
 
                     b.Property<int>("AttackerStrategy")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("AttackerTier")
                         .HasColumnType("integer");
 
                     b.Property<int>("AttackerTricks")
@@ -933,6 +939,9 @@ namespace GameServices.Api.MigrationsPostgres
 
                     b.Property<Guid?>("DefenderMonsterId")
                         .HasColumnType("uuid");
+
+                    b.Property<int>("DefenderPointsChange")
+                        .HasColumnType("integer");
 
                     b.Property<int>("DefenderPower")
                         .HasColumnType("integer");
@@ -978,11 +987,19 @@ namespace GameServices.Api.MigrationsPostgres
                     b.Property<DateTime?>("FoughtUtc")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<bool>("HighValue")
+                        .HasColumnType("boolean");
+
                     b.Property<int>("Reward")
                         .HasColumnType("integer");
 
                     b.Property<float>("Roll")
                         .HasColumnType("real");
+
+                    b.Property<string>("Season")
+                        .IsRequired()
+                        .HasMaxLength(7)
+                        .HasColumnType("character varying(7)");
 
                     b.Property<long>("Seed")
                         .HasColumnType("bigint");
@@ -1003,6 +1020,48 @@ namespace GameServices.Api.MigrationsPostgres
                     b.HasIndex("DefenderId", "Status");
 
                     b.ToTable("RankedMatches");
+                });
+
+            modelBuilder.Entity("GameServices.Api.Data.RankedSeasonRecord", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("HighValueWins")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Losses")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Points")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("RewardClaimed")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Season")
+                        .IsRequired()
+                        .HasMaxLength(7)
+                        .HasColumnType("character varying(7)");
+
+                    b.Property<DateTime>("UpdatedUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Wins")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Season", "Points");
+
+                    b.HasIndex("UserId", "Season")
+                        .IsUnique();
+
+                    b.ToTable("RankedSeasons");
                 });
 
             modelBuilder.Entity("GameServices.Api.Data.RefreshToken", b =>
@@ -1365,6 +1424,12 @@ namespace GameServices.Api.MigrationsPostgres
                         .HasColumnType("uuid");
 
                     b.Property<int>("Potential")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("RankedLosses")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("RankedWins")
                         .HasColumnType("integer");
 
                     b.Property<int>("RarityTier")
@@ -1818,6 +1883,15 @@ namespace GameServices.Api.MigrationsPostgres
                     b.HasOne("GameServices.Api.Data.User", null)
                         .WithMany()
                         .HasForeignKey("AttackerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("GameServices.Api.Data.RankedSeasonRecord", b =>
+                {
+                    b.HasOne("GameServices.Api.Data.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

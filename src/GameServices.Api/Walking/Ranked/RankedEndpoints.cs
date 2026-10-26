@@ -14,7 +14,8 @@ public record RankedEntriesRequest(List<RankedEntryRequest> Entries);
 
 public record RankedEntryDto(Guid MonsterId, int Slot, string Style, int Bst, int Wins, int Losses);
 
-public record RankedMeDto(List<RankedEntryDto> Entries, int Wins, int Losses, int RewardedWinsToday, int RewardedWinsPerDay, int WinGlimmer);
+public record RankedMeDto(List<RankedEntryDto> Entries, int Wins, int Losses, int RewardedWinsToday, int RewardedWinsPerDay, int WinGlimmer,
+    string Season, string SeasonName, DateTime SeasonEndsUtc, int Points, string Tier, int Place, int SeasonWins, int SeasonLosses, int HighValueWins);
 
 public record RankedMatchRequest(Guid MonsterId);
 
@@ -28,7 +29,8 @@ public record RankedFightRequest(string Strategy);
 /// <summary>Seed and both monsters' stats before strategies: the phone replays the fight with the game's own duel to show it.</summary>
 public record RankedFightResultDto(Guid MatchId, bool Won, string Strategy, string OpponentStrategy,
     int[] Mine, int[] Theirs, int Score, int OpponentScore, float Chance, float Roll, int Reward, int RewardedWinsToday, string Message,
-    long Seed, int[] MineBefore, int[] TheirsBefore, int Wins, int Losses);
+    long Seed, int[] MineBefore, int[] TheirsBefore, int Wins, int Losses,
+    int PointsChange, int Points, string Tier, bool HighValue);
 
 public record RankedHistoryDto(Guid MatchId, bool Attacking, string OtherName, bool Shadow, string MySpeciesId, string OtherSpeciesId, bool Won, DateTime FoughtUtc);
 
@@ -45,7 +47,9 @@ public record RankedHistoryDto(Guid MatchId, bool Attacking, string OtherName, b
 /// then 15%, 20%, 25%. Nobody in range? A SHADOW monster the server makes at your BST. The opponent's stats are fixed
 /// when the match is made, so what you see is what you fight. Ranked has no walking bonus, tonic or arena boost.
 /// Fights are unlimited; Glimmer for a win stops after RewardedWinsPerDay a day. Nobody ever loses a monster.
-/// (Ratings, tiers and seasons come next.)
+/// Every fight moves RANKED POINTS (RankedPoints: big, rare and upset wins are worth most), which decide tiers, the
+/// monthly season and the leaderboards (RankedLeaderboards). Within the BST window, matchmaking prefers walkers with
+/// similar points.
 /// </summary>
 public static class RankedEndpoints
 {
@@ -65,6 +69,7 @@ public static class RankedEndpoints
         group.MapPost("/ranked/match", Match);
         group.MapPost("/ranked/matches/{matchId:guid}/fight", Fight);
         group.MapGet("/ranked/history", History);
+        group.MapRankedLeaderboardEndpoints();
         return group;
     }
 
@@ -94,7 +99,16 @@ public static class RankedEndpoints
 
         List<RankedEntryDto> entries = rows.Select(r => new RankedEntryDto(r.m.Id, r.e.Slot, ((DuelStyle)r.e.DefenceStyle).ToString(),
             StatsOf(catalog, r.m).Total, r.e.Wins, r.e.Losses)).ToList();
-        return new RankedMeDto(entries, profile.RankedWins, profile.RankedLosses, profile.RankedRewardedWinsToday, RewardedWinsPerDay, WinGlimmer);
+
+        string season = RankedPoints.SeasonOf(DateTime.UtcNow);
+        RankedSeasonRecord record = await RankedSeasons.GetOrCreateAsync(db, me, season, cancel);
+        await db.SaveChangesAsync(cancel);
+        int place = await RankedSeasons.WorldPlaceAsync(db, record, cancel);
+        RankedTier tier = RankedPoints.TierFor(record.Points, place);
+
+        return new RankedMeDto(entries, profile.RankedWins, profile.RankedLosses, profile.RankedRewardedWinsToday, RewardedWinsPerDay, WinGlimmer,
+            season, RankedPoints.SeasonName(season), RankedPoints.SeasonEndsUtc(season), record.Points, tier.ToString(), place,
+            record.Wins, record.Losses, record.HighValueWins);
     }
 
     private static async Task<IResult> SetEntries(RankedEntriesRequest request, ClaimsPrincipal principal, AppDbContext db, MonsterFinder finder, CancellationToken cancel)
@@ -171,11 +185,21 @@ public static class RankedEndpoints
                           select new { e, m }).ToListAsync(cancel);
         List<Candidate> candidates = rows.Select(r => new Candidate(r.e, r.m, StatsOf(catalog, r.m))).ToList();
 
+        // Everyone's points this season (new to the season: a quarter of last season's), to pair similar walkers.
+        string season = RankedPoints.SeasonOf(now);
+        int myPoints = (await RankedSeasons.GetOrCreateAsync(db, me, season, cancel)).Points;
+        List<Guid> owners = candidates.Select(c => c.Entry.UserId).Distinct().ToList();
+        Dictionary<Guid, int> points = await db.RankedSeasons.AsNoTracking()
+            .Where(r => r.Season == season && owners.Contains(r.UserId))
+            .ToDictionaryAsync(r => r.UserId, r => r.Points, cancel);
+
         var match = new RankedMatch
         {
             AttackerId = me,
             AttackerMonsterId = attacker.Id,
             AttackerPower = mine.Power, AttackerGuard = mine.Guard, AttackerTricks = mine.Tricks, AttackerWits = mine.Wits, AttackerBst = myBst,
+            AttackerTier = attacker.RarityTier,
+            Season = season,
             Seed = NewSeed(),
             CreatedUtc = now,
             ExpiresUtc = now + MatchLifetime,
@@ -187,8 +211,11 @@ public static class RankedEndpoints
             List<Candidate> inRange = candidates.Where(c => Math.Abs(c.Stats.Total - myBst) <= myBst * window).ToList();
             if (inRange.Count == 0) continue;
 
-            // The closest few, so it isn't always the same opponent.
-            List<Candidate> closest = inRange.OrderBy(c => Math.Abs(c.Stats.Total - myBst)).Take(3).ToList();
+            // The closest few in points (then BST), so it isn't always the same opponent.
+            List<Candidate> closest = inRange
+                .OrderBy(c => Math.Abs(points.GetValueOrDefault(c.Entry.UserId) - myPoints))
+                .ThenBy(c => Math.Abs(c.Stats.Total - myBst))
+                .Take(3).ToList();
             found = closest[RandomNumberGenerator.GetInt32(closest.Count)];
             match.WindowPercent = (int)Math.Round(window * 100);
             break;
@@ -314,6 +341,27 @@ public static class RankedEndpoints
         match.Roll = outcome.Roll;
         match.FoughtUtc = now;
 
+        // Ranked Points, season records and each monster's own record.
+        string season = RankedPoints.SeasonOf(now);
+        match.Season = season;
+        PointsChange change = RankedPoints.For(outcome.PlayerWon, match.AttackerBst, match.AttackerTier, match.DefenderBst, match.DefenderTier, match.Shadow);
+        match.AttackerPointsChange = change.Attacker;
+        match.DefenderPointsChange = change.Defender;
+        match.HighValue = change.HighValue;
+
+        RankedSeasonRecord mySeason = await RankedSeasons.GetOrCreateAsync(db, me, season, cancel);
+        ApplySeason(mySeason, outcome.PlayerWon, change.Attacker, change.HighValue, now);
+        if (match.DefenderId is Guid defenderUser)
+        {
+            RankedSeasonRecord theirSeason = await RankedSeasons.GetOrCreateAsync(db, defenderUser, season, cancel);
+            ApplySeason(theirSeason, !outcome.PlayerWon, change.Defender, false, now);
+        }
+
+        WalkingMonster? myMonster = await db.WalkingMonsters.FirstOrDefaultAsync(m => m.Id == match.AttackerMonsterId, cancel);
+        WalkingMonster? theirMonster = match.DefenderMonsterId is Guid dmId ? await db.WalkingMonsters.FirstOrDefaultAsync(m => m.Id == dmId, cancel) : null;
+        if (myMonster != null) { if (outcome.PlayerWon) myMonster.RankedWins++; else myMonster.RankedLosses++; }
+        if (theirMonster != null) { if (outcome.PlayerWon) theirMonster.RankedLosses++; else theirMonster.RankedWins++; }
+
         RankedEntry? myEntry = await db.RankedEntries.FirstOrDefaultAsync(e => e.UserId == me && e.MonsterId == match.AttackerMonsterId, cancel);
         RankedEntry? theirEntry = match.DefenderMonsterId is Guid dm ? await db.RankedEntries.FirstOrDefaultAsync(e => e.MonsterId == dm, cancel) : null;
         WalkingProfile? theirProfile = match.DefenderId is Guid du ? await WalkingEndpoints.GetOrCreateProfile(db, du, cancel) : null;
@@ -347,15 +395,26 @@ public static class RankedEndpoints
             message = "Defeated this time - your monster is fine. Try another fight!";
         }
 
+        if (change.HighValue) message += " A high-value win!";
         await db.SaveChangesAsync(cancel);
+        RankedTier tierNow = await RankedSeasons.TierAsync(db, mySeason, cancel);
 
         return Results.Ok(new RankedFightResultDto(match.Id, outcome.PlayerWon, strategy.ToString(), defence.ToString(),
             Stats(outcome.Player.After), Stats(outcome.Opponent.After), outcome.Player.Score, outcome.Opponent.Score,
             outcome.Player.Chance, outcome.Roll, match.Reward, profile.RankedRewardedWinsToday, message,
-            match.Seed, Stats(attacker), Stats(defender), profile.RankedWins, profile.RankedLosses));
+            match.Seed, Stats(attacker), Stats(defender), profile.RankedWins, profile.RankedLosses,
+            change.Attacker, mySeason.Points, tierNow.ToString(), change.HighValue));
     }
 
     private static int[] Stats(DuelStats s) => new[] { s.Power, s.Guard, s.Trickery, s.Wits };
+
+    private static void ApplySeason(RankedSeasonRecord record, bool won, int pointsChange, bool highValue, DateTime now)
+    {
+        record.Points = Math.Max(0, record.Points + pointsChange);
+        if (won) record.Wins++; else record.Losses++;
+        if (highValue) record.HighValueWins++;
+        record.UpdatedUtc = now;
+    }
 
     // ------------------------------------------------------------------ history
 

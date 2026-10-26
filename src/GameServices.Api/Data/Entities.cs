@@ -556,6 +556,28 @@ public class RankedMatch
     public float Roll { get; set; }
     public int Reward { get; set; }
     public DateTime? FoughtUtc { get; set; }
+
+    // Ranked Points (see Ranked/RankedPoints)
+    public int AttackerTier { get; set; }
+    public string Season { get; set; } = "";
+    public int AttackerPointsChange { get; set; }
+    public int DefenderPointsChange { get; set; }
+    public bool HighValue { get; set; }
+}
+
+/// <summary>A walker's ranked season (one calendar month): points, record and whether its reward was collected.</summary>
+public class RankedSeasonRecord
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid UserId { get; set; }
+    /// <summary>"2026-10".</summary>
+    public string Season { get; set; } = "";
+    public int Points { get; set; }
+    public int Wins { get; set; }
+    public int Losses { get; set; }
+    public int HighValueWins { get; set; }
+    public bool RewardClaimed { get; set; }
+    public DateTime UpdatedUtc { get; set; } = DateTime.UtcNow;
 }
 
 /// <summary>Accepted steps for one player on one day (the player's own calendar day, "yyyy-MM-dd").</summary>
@@ -700,6 +722,10 @@ public class WalkingMonster
 
     /// <summary>Who it came from, if it found a new home through an offer.</summary>
     public Guid? ArrivedFromUserId { get; set; }
+
+    /// <summary>Ranked fights this monster has won and lost (attacking or defending) - its leaderboard record.</summary>
+    public int RankedWins { get; set; }
+    public int RankedLosses { get; set; }
 }
 
 /// <summary>How many of each species have ever been found (for serial numbers).</summary>

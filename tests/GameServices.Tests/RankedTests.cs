@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using GameServices.Api.Auth;
+using GameServices.Api.Social;
 using GameServices.Api.Data;
 using GameServices.Api.Infrastructure;
 using GameServices.Api.Walking.Monsters;
@@ -249,6 +250,111 @@ public class RankedTests : IClassFixture<ApiFactory>
 
         HttpResponseMessage r = await p.Http.PostAsJsonAsync($"/api/walking/ranked/matches/{match.Id}/fight", new RankedFightRequest("Balanced"));
         Assert.Equal(HttpStatusCode.Conflict, r.StatusCode);
+    }
+
+    // ------------------------------------------------------------------ points, leaderboards and seasons
+
+    private static async Task MakeFriends(Player a, Player b)
+    {
+        await a.Http.PostAsJsonAsync("/api/friends/requests", new UsernameRequest(b.Name));
+        Assert.Equal(HttpStatusCode.NoContent, (await b.Http.PostAsync($"/api/friends/requests/{a.Id}/accept", null)).StatusCode);
+    }
+
+    [Fact]
+    public async Task A_fight_moves_both_walkers_points_and_both_monsters_records()
+    {
+        await EmptyPool();
+        Player alice = await NewPlayer(), bob = await NewPlayer();
+        Guid a = await RankedMonster(alice, 400_001, 70, 4, Rare);
+        Guid b = await RankedMonster(bob, 400_002, 70, 4, Rare);
+        RankedMatchDto match = await Match(alice, a);
+        Assert.Equal(bob.Name, match.OpponentName);
+
+        RankedFightResultDto result = (await (await alice.Http.PostAsJsonAsync($"/api/walking/ranked/matches/{match.Id}/fight", new RankedFightRequest("MaxPower")))
+            .Content.ReadFromJsonAsync<RankedFightResultDto>())!;
+
+        PointsChange expected = RankedPoints.For(result.Won, match.Bst, 4, match.OpponentBst, 4, false);
+        Assert.Equal(expected.Attacker, result.PointsChange);
+        Assert.Equal(Math.Max(0, expected.Attacker), result.Points);
+        Assert.True(result.HighValue == (result.Won && expected.HighValue));
+
+        RankedMeDto bobMe = (await bob.Http.GetFromJsonAsync<RankedMeDto>("/api/walking/ranked"))!;
+        Assert.Equal(Math.Max(0, expected.Defender), bobMe.Points);
+        Assert.Equal(1, bobMe.SeasonWins + bobMe.SeasonLosses);
+
+        await WithDb(async db =>
+        {
+            Assert.Equal(1, (await db.WalkingMonsters.FirstAsync(m => m.Id == a)).RankedWins + (await db.WalkingMonsters.FirstAsync(m => m.Id == a)).RankedLosses);
+            Assert.Equal(result.Won ? 1 : 0, (await db.WalkingMonsters.FirstAsync(m => m.Id == b)).RankedLosses);
+        });
+    }
+
+    [Fact]
+    public async Task The_friends_board_orders_by_points_then_high_value_wins()
+    {
+        Player me = await NewPlayer(), sam = await NewPlayer(), kim = await NewPlayer();
+        await MakeFriends(me, sam);
+        await MakeFriends(me, kim);
+        string season = RankedPoints.SeasonOf(DateTime.UtcNow);
+        await WithDb(db =>
+        {
+            db.RankedSeasons.Add(new RankedSeasonRecord { UserId = me.Id, Season = season, Points = 120, Wins = 9, Losses = 2, HighValueWins = 1 });
+            db.RankedSeasons.Add(new RankedSeasonRecord { UserId = sam.Id, Season = season, Points = 120, Wins = 6, Losses = 1, HighValueWins = 4 });
+            db.RankedSeasons.Add(new RankedSeasonRecord { UserId = kim.Id, Season = season, Points = 350, Wins = 20, Losses = 9, HighValueWins = 0 });
+            return Task.CompletedTask;
+        });
+
+        PlayerBoardDto board = (await me.Http.GetFromJsonAsync<PlayerBoardDto>("/api/walking/ranked/leaderboard/players?scope=friends"))!;
+        Assert.Equal(new[] { kim.Name, sam.Name, me.Name }, board.Rows.Select(r => r.Username).ToArray());
+        Assert.Equal("Gold", board.Rows[0].Tier);
+        Assert.Equal("Silver", board.Rows[1].Tier);
+        Assert.Equal(3, board.Me!.Place);
+        Assert.True(board.Me.IsMe);
+    }
+
+    [Fact]
+    public async Task The_monster_board_scores_BST_plus_wins()
+    {
+        Player p = await NewPlayer(), q = await NewPlayer();
+        const string species = "MON_0007";
+        Guid strong = await RankedMonster(p, 300_001, 60, 2, species);
+        Guid winner = await RankedMonster(q, 300_002, 40, 2, species);
+        await WithDb(async db =>
+        {
+            (await db.WalkingMonsters.FirstAsync(m => m.Id == strong)).RankedLosses = 1;
+            (await db.WalkingMonsters.FirstAsync(m => m.Id == winner)).RankedWins = 30;
+        });
+
+        List<MonsterBoardRowDto> board = (await p.Http.GetFromJsonAsync<List<MonsterBoardRowDto>>("/api/walking/ranked/leaderboard/monsters?species=" + species))!;
+        MonsterBoardRowDto first = board[0], second = board[1];
+        Assert.Equal(winner, first.MonsterId);   // 30 wins (+3,000) beat a higher BST with none
+        Assert.Equal(Bst(300_002, 40, 2, species) + 3000, first.Score);
+        Assert.Equal(strong, second.MonsterId);
+        Assert.True(second.IsMine);
+        Assert.Equal(q.Name, first.OwnerName);
+    }
+
+    [Fact]
+    public async Task Last_seasons_reward_is_collected_once_and_a_new_season_starts_from_a_quarter()
+    {
+        Player p = await NewPlayer();
+        string season = RankedPoints.SeasonOf(DateTime.UtcNow);
+        string last = RankedPoints.PreviousSeason(season);
+        await WithDb(db =>
+        {
+            db.RankedSeasons.Add(new RankedSeasonRecord { UserId = p.Id, Season = last, Points = 800, Wins = 50, Losses = 20 });
+            return Task.CompletedTask;
+        });
+
+        SeasonDto now = (await p.Http.GetFromJsonAsync<SeasonDto>("/api/walking/ranked/season"))!;
+        Assert.Equal(200, now.Points);            // a quarter of 800
+        Assert.Equal("Platinum", now.LastSeason!.Tier);
+        Assert.True(now.LastSeason.CanClaim);
+
+        HttpResponseMessage claim = await p.Http.PostAsync("/api/walking/ranked/season/claim", null);
+        Assert.Equal(HttpStatusCode.OK, claim.StatusCode);
+        Assert.Equal(500, (await p.Http.GetFromJsonAsync<WalletDto>("/api/walking/wallet"))!.Glimmer);
+        Assert.Equal(HttpStatusCode.Conflict, (await p.Http.PostAsync("/api/walking/ranked/season/claim", null)).StatusCode);
     }
 
     [Fact]
