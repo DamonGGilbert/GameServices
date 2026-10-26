@@ -832,6 +832,168 @@ namespace GameServices.Api.Migrations
                     b.ToTable("PlayerSaves");
                 });
 
+            modelBuilder.Entity("GameServices.Api.Data.RankedEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("DefenceStyle")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Losses")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("MonsterId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Slot")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Wins")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MonsterId")
+                        .IsUnique();
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("RankedEntries");
+                });
+
+            modelBuilder.Entity("GameServices.Api.Data.RankedMatch", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("AttackerBst")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("AttackerGuard")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("AttackerId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("AttackerMonsterId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("AttackerPower")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("AttackerStrategy")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("AttackerTricks")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("AttackerWits")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("AttackerWon")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<float>("Chance")
+                        .HasColumnType("REAL");
+
+                    b.Property<DateTime>("CreatedUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("DefenderBst")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("DefenderGuard")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid?>("DefenderId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("DefenderLevel")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid?>("DefenderMonsterId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("DefenderPower")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("DefenderSeed")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("DefenderSpeciesId")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("DefenderStrategy")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("DefenderStyle")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("DefenderTier")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("DefenderTrainedGuard")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("DefenderTrainedPower")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("DefenderTrainedTricks")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("DefenderTrainedWits")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("DefenderTricks")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("DefenderWits")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("ExpiresUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("FoughtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Reward")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<float>("Roll")
+                        .HasColumnType("REAL");
+
+                    b.Property<long>("Seed")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("Shadow")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("WindowPercent")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AttackerId", "Status");
+
+                    b.HasIndex("DefenderId", "Status");
+
+                    b.ToTable("RankedMatches");
+                });
+
             modelBuilder.Entity("GameServices.Api.Data.RefreshToken", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1293,6 +1455,19 @@ namespace GameServices.Api.Migrations
                     b.Property<int>("RacesWon")
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("RankedDay")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("RankedLosses")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("RankedRewardedWinsToday")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("RankedWins")
+                        .HasColumnType("INTEGER");
+
                     b.Property<bool>("ShareSteps")
                         .HasColumnType("INTEGER");
 
@@ -1610,6 +1785,30 @@ namespace GameServices.Api.Migrations
                         .IsRequired();
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("GameServices.Api.Data.RankedEntry", b =>
+                {
+                    b.HasOne("GameServices.Api.Data.WalkingMonster", null)
+                        .WithMany()
+                        .HasForeignKey("MonsterId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("GameServices.Api.Data.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("GameServices.Api.Data.RankedMatch", b =>
+                {
+                    b.HasOne("GameServices.Api.Data.User", null)
+                        .WithMany()
+                        .HasForeignKey("AttackerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("GameServices.Api.Data.RefreshToken", b =>

@@ -55,6 +55,8 @@ public class AppDbContext : DbContext
     public DbSet<WalkingLedgerEntry> WalkingLedger => Set<WalkingLedgerEntry>();
     public DbSet<MonsterOffer> MonsterOffers => Set<MonsterOffer>();
     public DbSet<WalkingRoute> WalkingRoutes => Set<WalkingRoute>();
+    public DbSet<RankedEntry> RankedEntries => Set<RankedEntry>();
+    public DbSet<RankedMatch> RankedMatches => Set<RankedMatch>();
 
     // SQLite doesn't remember that a date is UTC, so we put the "UTC" label back
     // whenever we read one. Otherwise clients would see dates without the trailing Z.
@@ -338,6 +340,24 @@ public class AppDbContext : DbContext
             o.HasIndex(x => new { x.FromUserId, x.Status });
             o.HasIndex(x => new { x.MonsterId, x.Status });
             o.HasOne<WalkingMonster>().WithMany().HasForeignKey(x => x.MonsterId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        model.Entity<RankedEntry>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => x.MonsterId).IsUnique();
+            e.HasIndex(x => x.UserId);
+            e.HasOne<User>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne<WalkingMonster>().WithMany().HasForeignKey(x => x.MonsterId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        model.Entity<RankedMatch>(m =>
+        {
+            m.HasKey(x => x.Id);
+            m.Property(x => x.DefenderSpeciesId).HasMaxLength(32);
+            m.HasIndex(x => new { x.AttackerId, x.Status });
+            m.HasIndex(x => new { x.DefenderId, x.Status });
+            m.HasOne<User>().WithMany().HasForeignKey(x => x.AttackerId).OnDelete(DeleteBehavior.Cascade);
         });
 
         model.Entity<WalkingRoute>(r =>

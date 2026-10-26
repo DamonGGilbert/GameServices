@@ -94,6 +94,7 @@ public static class WalkingEndpoints
         group.MapWalkingPackEndpoints();
         group.MapMonsterOfferEndpoints();
         group.MapWalkingWalletEndpoints();
+        GameServices.Api.Walking.Ranked.RankedEndpoints.MapRankedEndpoints(group);
 
         // Safe walking loops with bonus rewards (Walking/Routes).
         group.MapRouteEndpoints();

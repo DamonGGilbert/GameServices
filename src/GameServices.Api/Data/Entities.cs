@@ -483,6 +483,79 @@ public class WalkingProfile
     public int TogetherBonusToday { get; set; }
     /// <summary>Days on which this walker walked with a friend.</summary>
     public int TogetherDaysTotal { get; set; }
+
+    // ---- Ranked fights (see Walking/Ranked) ----
+    public int RankedWins { get; set; }
+    public int RankedLosses { get; set; }
+    /// <summary>UTC day of RankedRewardedWinsToday (wins that paid Glimmer - up to 10 a day).</summary>
+    public string RankedDay { get; set; } = "";
+    public int RankedRewardedWinsToday { get; set; }
+}
+
+/// <summary>One of a walker's (up to 3) monsters entered into ranked, and how it fights when attacked.</summary>
+public class RankedEntry
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid UserId { get; set; }
+    public Guid MonsterId { get; set; }
+    public int Slot { get; set; }
+    /// <summary>A Ranked.DuelStyle: how it picks its strategy when someone attacks it while its walker is away.</summary>
+    public int DefenceStyle { get; set; }
+    public int Wins { get; set; }
+    public int Losses { get; set; }
+    public DateTime CreatedUtc { get; set; } = DateTime.UtcNow;
+}
+
+public enum RankedMatchStatus { Open = 0, Fought = 1, Expired = 2 }
+
+/// <summary>
+/// One ranked fight: set up when "Fight" is tapped (the opponent and both monsters' stats are fixed then, so what the
+/// player sees is what they fight), then decided when they pick a strategy.
+/// </summary>
+public class RankedMatch
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid AttackerId { get; set; }
+    public Guid AttackerMonsterId { get; set; }
+    public int AttackerPower { get; set; }
+    public int AttackerGuard { get; set; }
+    public int AttackerTricks { get; set; }
+    public int AttackerWits { get; set; }
+    public int AttackerBst { get; set; }
+
+    /// <summary>Null for a shadow monster (made by the server when nobody's in range).</summary>
+    public Guid? DefenderId { get; set; }
+    public Guid? DefenderMonsterId { get; set; }
+    public bool Shadow { get; set; }
+    public string DefenderSpeciesId { get; set; } = "";
+    public long DefenderSeed { get; set; }
+    public int DefenderTier { get; set; }
+    public int DefenderLevel { get; set; }
+    public int DefenderTrainedPower { get; set; }
+    public int DefenderTrainedGuard { get; set; }
+    public int DefenderTrainedTricks { get; set; }
+    public int DefenderTrainedWits { get; set; }
+    public int DefenderPower { get; set; }
+    public int DefenderGuard { get; set; }
+    public int DefenderTricks { get; set; }
+    public int DefenderWits { get; set; }
+    public int DefenderBst { get; set; }
+    public int DefenderStyle { get; set; }
+
+    /// <summary>How far the search had to widen (10, 15, 20 or 25%); 0 for a shadow.</summary>
+    public int WindowPercent { get; set; }
+    public long Seed { get; set; }
+    public RankedMatchStatus Status { get; set; } = RankedMatchStatus.Open;
+    public DateTime CreatedUtc { get; set; } = DateTime.UtcNow;
+    public DateTime ExpiresUtc { get; set; }
+
+    public int AttackerStrategy { get; set; }
+    public int DefenderStrategy { get; set; }
+    public bool AttackerWon { get; set; }
+    public float Chance { get; set; }
+    public float Roll { get; set; }
+    public int Reward { get; set; }
+    public DateTime? FoughtUtc { get; set; }
 }
 
 /// <summary>Accepted steps for one player on one day (the player's own calendar day, "yyyy-MM-dd").</summary>
