@@ -7,13 +7,13 @@ using Microsoft.EntityFrameworkCore;
 
 namespace GameServices.Api.Walking.Ranked;
 
-public record PlayerBoardRowDto(int Place, Guid UserId, string Username, int Points, string Tier, int Wins, int Losses, int HighValueWins, bool IsMe);
+public record PlayerBoardRowDto(int Place, Guid UserId, string Username, int Points, string Tier, int Wins, int Losses, int HighValueWins, bool IsMe, string Country = "");
 
 public record PlayerBoardDto(string Season, string SeasonName, DateTime SeasonEndsUtc, string Scope, List<PlayerBoardRowDto> Rows, PlayerBoardRowDto? Me);
 
 /// <summary>A monster on the board, with its recipe so the phone can draw its card.</summary>
 public record MonsterBoardRowDto(int Place, Guid MonsterId, Guid OwnerId, string OwnerName, string SpeciesId, long Seed, int RarityTier, int Level,
-    int TrainedPower, int TrainedGuard, int TrainedTricks, int TrainedWits, int Bst, int Wins, int Losses, int Score, bool IsMine);
+    int TrainedPower, int TrainedGuard, int TrainedTricks, int TrainedWits, int Bst, int Wins, int Losses, int Score, bool IsMine, string OwnerCountry = "");
 
 public record SeasonRewardDto(string Season, string SeasonName, string Tier, int Points, int Place, int Glimmer, string Title, bool Claimed, bool CanClaim);
 
@@ -74,6 +74,7 @@ public static class RankedLeaderboards
         List<RankedSeasonRecord> top = await RankedSeasons.Ordered(query).Take(BoardSize).ToListAsync(cancel);
         List<Guid> ids = top.Select(r => r.UserId).Append(me).Distinct().ToList();
         Dictionary<Guid, string> names = await db.Users.AsNoTracking().Where(u => ids.Contains(u.Id)).ToDictionaryAsync(u => u.Id, u => u.Username, cancel);
+        Dictionary<Guid, string> countries = await db.WalkingProfiles.AsNoTracking().Where(p => ids.Contains(p.UserId)).ToDictionaryAsync(p => p.UserId, p => p.Country, cancel);
 
         // Places on a friends board are among friends; tiers always use the WORLD place (Legend is a world top 100).
         var rows = new List<PlayerBoardRowDto>();
@@ -81,14 +82,14 @@ public static class RankedLeaderboards
         {
             RankedSeasonRecord r = top[i];
             int worldPlace = friendsOnly ? await RankedSeasons.WorldPlaceAsync(db, r, cancel) : i + 1;
-            rows.Add(Row(i + 1, r, names, RankedPoints.TierFor(r.Points, worldPlace), me));
+            rows.Add(Row(i + 1, r, names, RankedPoints.TierFor(r.Points, worldPlace), me) with { Country = countries.GetValueOrDefault(r.UserId, "") ?? "" });
         }
 
         PlayerBoardRowDto? meRow = rows.FirstOrDefault(r => r.IsMe);
         if (meRow == null)
         {
             int place = await RankedSeasons.WorldPlaceAsync(db, mine, cancel);
-            meRow = Row(place, mine, names, RankedPoints.TierFor(mine.Points, place), me);
+            meRow = Row(place, mine, names, RankedPoints.TierFor(mine.Points, place), me) with { Country = countries.GetValueOrDefault(me, "") ?? "" };
         }
 
         return Results.Ok(new PlayerBoardDto(season, RankedPoints.SeasonName(season), RankedPoints.SeasonEndsUtc(season), friendsOnly ? "friends" : "world", rows, meRow));
@@ -117,10 +118,12 @@ public static class RankedLeaderboards
 
         List<Guid> owners = scored.Select(x => x.Monster.OwnerId).Distinct().ToList();
         Dictionary<Guid, string> names = await db.Users.AsNoTracking().Where(u => owners.Contains(u.Id)).ToDictionaryAsync(u => u.Id, u => u.Username, cancel);
+        Dictionary<Guid, string> countries = await db.WalkingProfiles.AsNoTracking().Where(p => owners.Contains(p.UserId)).ToDictionaryAsync(p => p.UserId, p => p.Country, cancel);
 
         return Results.Ok(scored.Select((x, i) => new MonsterBoardRowDto(i + 1, x.Monster.Id, x.Monster.OwnerId, names.GetValueOrDefault(x.Monster.OwnerId, "A walker"),
             x.Monster.SpeciesId, x.Monster.Seed, x.Monster.RarityTier, x.Monster.Level, x.Monster.TrainedPower, x.Monster.TrainedGuard,
-            x.Monster.TrainedTricks, x.Monster.TrainedWits, x.Bst, x.Monster.RankedWins, x.Monster.RankedLosses, x.Score, x.Monster.OwnerId == me)).ToList());
+            x.Monster.TrainedTricks, x.Monster.TrainedWits, x.Bst, x.Monster.RankedWins, x.Monster.RankedLosses, x.Score, x.Monster.OwnerId == me,
+            countries.GetValueOrDefault(x.Monster.OwnerId, "") ?? "")).ToList());
     }
 
     private static async Task<IResult> Season(ClaimsPrincipal principal, AppDbContext db, CancellationToken cancel)

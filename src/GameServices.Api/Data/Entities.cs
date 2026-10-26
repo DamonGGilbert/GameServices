@@ -490,6 +490,9 @@ public class WalkingProfile
     /// <summary>UTC day of RankedRewardedWinsToday (wins that paid Glimmer - up to 10 a day).</summary>
     public string RankedDay { get; set; } = "";
     public int RankedRewardedWinsToday { get; set; }
+
+    /// <summary>A two-letter country the walker chose to show (never worked out from where they are). Empty = none.</summary>
+    public string Country { get; set; } = "";
 }
 
 /// <summary>One of a walker's (up to 3) monsters entered into ranked, and how it fights when attacked.</summary>
@@ -563,6 +566,67 @@ public class RankedMatch
     public int AttackerPointsChange { get; set; }
     public int DefenderPointsChange { get; set; }
     public bool HighValue { get; set; }
+}
+
+public enum ChallengeStatus { Pending = 0, Fought = 1, Declined = 2, Cancelled = 3, Expired = 4 }
+
+/// <summary>
+/// A challenge from one walker to another (anywhere in the world), for an optional Glimmer stake held by the server.
+/// The challenger's monster and secret strategy are set when it's sent; the other walker's when they accept - and then
+/// the server decides it straight away.
+/// </summary>
+public class Challenge
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid FromUserId { get; set; }
+    public Guid ToUserId { get; set; }
+    public Guid FromMonsterId { get; set; }
+    public int FromStrategy { get; set; }
+    public int Stake { get; set; }
+    public ChallengeStatus Status { get; set; } = ChallengeStatus.Pending;
+    public DateTime CreatedUtc { get; set; } = DateTime.UtcNow;
+    public DateTime ExpiresUtc { get; set; }
+    public DateTime? DecidedUtc { get; set; }
+
+    // Filled in when it's fought.
+    public Guid? ToMonsterId { get; set; }
+    public int ToStrategy { get; set; }
+    public long Seed { get; set; }
+    public bool FromWon { get; set; }
+    public float Chance { get; set; }
+    public float Roll { get; set; }
+    /// <summary>True when the two monsters were close enough in BST for Ranked Points to move.</summary>
+    public bool Ranked { get; set; }
+    public int FromPointsChange { get; set; }
+    public int ToPointsChange { get; set; }
+
+    // Both monsters as they were for the fight (recipe + stats), so it can be replayed later.
+    public string FromSpeciesId { get; set; } = "";
+    public long FromSeed { get; set; }
+    public int FromTier { get; set; }
+    public int FromLevel { get; set; }
+    public int FromTrainedPower { get; set; }
+    public int FromTrainedGuard { get; set; }
+    public int FromTrainedTricks { get; set; }
+    public int FromTrainedWits { get; set; }
+    public int FromPower { get; set; }
+    public int FromGuard { get; set; }
+    public int FromTricks { get; set; }
+    public int FromWits { get; set; }
+    public int FromBst { get; set; }
+    public string ToSpeciesId { get; set; } = "";
+    public long ToSeed { get; set; }
+    public int ToTier { get; set; }
+    public int ToLevel { get; set; }
+    public int ToTrainedPower { get; set; }
+    public int ToTrainedGuard { get; set; }
+    public int ToTrainedTricks { get; set; }
+    public int ToTrainedWits { get; set; }
+    public int ToPower { get; set; }
+    public int ToGuard { get; set; }
+    public int ToTricks { get; set; }
+    public int ToWits { get; set; }
+    public int ToBst { get; set; }
 }
 
 /// <summary>A walker's ranked season (one calendar month): points, record and whether its reward was collected.</summary>

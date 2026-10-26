@@ -95,6 +95,157 @@ namespace GameServices.Api.MigrationsPostgres
                     b.ToTable("CardGameProfiles");
                 });
 
+            modelBuilder.Entity("GameServices.Api.Data.Challenge", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<float>("Chance")
+                        .HasColumnType("real");
+
+                    b.Property<DateTime>("CreatedUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("DecidedUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("ExpiresUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("FromBst")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("FromGuard")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("FromLevel")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("FromMonsterId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("FromPointsChange")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("FromPower")
+                        .HasColumnType("integer");
+
+                    b.Property<long>("FromSeed")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("FromSpeciesId")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<int>("FromStrategy")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("FromTier")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("FromTrainedGuard")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("FromTrainedPower")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("FromTrainedTricks")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("FromTrainedWits")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("FromTricks")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("FromUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("FromWits")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("FromWon")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("Ranked")
+                        .HasColumnType("boolean");
+
+                    b.Property<float>("Roll")
+                        .HasColumnType("real");
+
+                    b.Property<long>("Seed")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("Stake")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("ToBst")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("ToGuard")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("ToLevel")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("ToMonsterId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("ToPointsChange")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("ToPower")
+                        .HasColumnType("integer");
+
+                    b.Property<long>("ToSeed")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("ToSpeciesId")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<int>("ToStrategy")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("ToTier")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("ToTrainedGuard")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("ToTrainedPower")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("ToTrainedTricks")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("ToTrainedWits")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("ToTricks")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("ToUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("ToWits")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FromUserId", "Status");
+
+                    b.HasIndex("ToUserId", "Status");
+
+                    b.ToTable("Challenges");
+                });
+
             modelBuilder.Entity("GameServices.Api.Data.ChatMessage", b =>
                 {
                     b.Property<long>("Id")
@@ -1493,6 +1644,10 @@ namespace GameServices.Api.MigrationsPostgres
                     b.Property<Guid?>("CompanionMonsterId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("Country")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.Property<int>("EncounterSteps")
                         .HasColumnType("integer");
 
@@ -1673,6 +1828,15 @@ namespace GameServices.Api.MigrationsPostgres
                         .IsRequired();
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("GameServices.Api.Data.Challenge", b =>
+                {
+                    b.HasOne("GameServices.Api.Data.User", null)
+                        .WithMany()
+                        .HasForeignKey("FromUserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("GameServices.Api.Data.ChatMessage", b =>

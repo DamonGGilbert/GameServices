@@ -58,6 +58,7 @@ public class AppDbContext : DbContext
     public DbSet<RankedEntry> RankedEntries => Set<RankedEntry>();
     public DbSet<RankedMatch> RankedMatches => Set<RankedMatch>();
     public DbSet<RankedSeasonRecord> RankedSeasons => Set<RankedSeasonRecord>();
+    public DbSet<Challenge> Challenges => Set<Challenge>();
 
     // SQLite doesn't remember that a date is UTC, so we put the "UTC" label back
     // whenever we read one. Otherwise clients would see dates without the trailing Z.
@@ -350,6 +351,16 @@ public class AppDbContext : DbContext
             e.HasIndex(x => x.UserId);
             e.HasOne<User>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
             e.HasOne<WalkingMonster>().WithMany().HasForeignKey(x => x.MonsterId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        model.Entity<Challenge>(c =>
+        {
+            c.HasKey(x => x.Id);
+            c.Property(x => x.FromSpeciesId).HasMaxLength(32);
+            c.Property(x => x.ToSpeciesId).HasMaxLength(32);
+            c.HasIndex(x => new { x.ToUserId, x.Status });
+            c.HasIndex(x => new { x.FromUserId, x.Status });
+            c.HasOne<User>().WithMany().HasForeignKey(x => x.FromUserId).OnDelete(DeleteBehavior.Cascade);
         });
 
         model.Entity<RankedSeasonRecord>(r =>

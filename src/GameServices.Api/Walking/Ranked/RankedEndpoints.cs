@@ -70,6 +70,7 @@ public static class RankedEndpoints
         group.MapPost("/ranked/matches/{matchId:guid}/fight", Fight);
         group.MapGet("/ranked/history", History);
         group.MapRankedLeaderboardEndpoints();
+        group.MapChallengeEndpoints();
         return group;
     }
 
