@@ -8,7 +8,7 @@ namespace GameServices.Api.Walking.Monsters;
 public record WalkingMonsterDto(Guid Id, string SpeciesId, long Seed, int RarityTier, int Potential, int RulesVersion, int Serial,
     string Source, string? BiomeId, DateTime FoundUtc, bool Seen,
     int Level, int Experience, int TrainedPower, int TrainedGuard, int TrainedTricks, int TrainedWits, int TrainingSteps,
-    string? ArrivedFrom);
+    string? ArrivedFrom, string Nickname = "");
 
 public record MonsterProgressDto(Guid Id, int Level, int Experience, int TrainedPower, int TrainedGuard, int TrainedTricks, int TrainedWits, int TrainingSteps);
 
@@ -32,6 +32,7 @@ public static class MonsterEndpoints
     public static RouteGroupBuilder MapWalkingMonsterEndpoints(this RouteGroupBuilder group)
     {
         group.MapGet("/monsters", Mine);
+        group.MapMonsterNameEndpoints();
         group.MapPost("/monsters/{monsterId:guid}/seen", MarkSeen);
         group.MapPut("/monsters/progress", SaveProgress);
         return group;
@@ -68,7 +69,7 @@ public static class MonsterEndpoints
 
     public static WalkingMonsterDto ToDto(WalkingMonster m, string? arrivedFrom) =>
         new(m.Id, m.SpeciesId, m.Seed, m.RarityTier, m.Potential, m.RulesVersion, m.Serial, m.Source, m.BiomeId, m.FoundUtc, m.Seen,
-            m.Level, m.Experience, m.TrainedPower, m.TrainedGuard, m.TrainedTricks, m.TrainedWits, m.TrainingSteps, arrivedFrom);
+            m.Level, m.Experience, m.TrainedPower, m.TrainedGuard, m.TrainedTricks, m.TrainedWits, m.TrainingSteps, arrivedFrom, m.Nickname ?? "");
 
     // The game sends its monsters' levels and training. The server can't watch every step of a battle or a walk, so it
     // keeps what's believable: no level above 100, never more training than the monster's potential allows.

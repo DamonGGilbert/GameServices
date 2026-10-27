@@ -1,3 +1,4 @@
+using GameServices.Api.Moderation;
 using System.Security.Claims;
 using GameServices.Api.Data;
 using GameServices.Api.Social;
@@ -86,7 +87,8 @@ public static class ChatEndpoints
             return Results.Problem("Slow down! You're sending messages too fast.", statusCode: StatusCodes.Status429TooManyRequests);
         }
 
-        ChatMessage message = new() { SenderId = me, RecipientId = friendId, Text = text };
+        // Swearing, slurs and hate are starred out before anyone sees them.
+        ChatMessage message = new() { SenderId = me, RecipientId = friendId, Text = ContentFilter.Censor(text) };
         db.ChatMessages.Add(message);
         await db.SaveChangesAsync(cancel);
         await Presence.Touch(db, me, cancel);

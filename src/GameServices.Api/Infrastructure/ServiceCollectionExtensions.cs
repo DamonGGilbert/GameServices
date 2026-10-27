@@ -150,7 +150,7 @@ public static class ServiceCollectionExtensions
         {
             http.Timeout = TimeSpan.FromSeconds(60);
             // Overpass asks every app to say who it is.
-            http.DefaultRequestHeaders.UserAgent.ParseAdd("GameServices-MapRelay/1.0 (Wanderkin walking game)");
+            http.DefaultRequestHeaders.UserAgent.ParseAdd("GameServices-MapRelay/1.0 (Steplings walking game)");
         });
         services.AddSingleton<GameServices.Api.Map.IMapUpstream, GameServices.Api.Map.OverpassUpstream>();
         services.AddSingleton<GameServices.Api.Map.MapTileStore>();

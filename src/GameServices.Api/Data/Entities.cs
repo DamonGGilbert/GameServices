@@ -493,6 +493,9 @@ public class WalkingProfile
 
     /// <summary>A two-letter country the walker chose to show (never worked out from where they are). Empty = none.</summary>
     public string Country { get; set; } = "";
+
+    /// <summary>Name Tags held: each renames one monster (see Walking/Monsters/MonsterNames). Everyone starts with one.</summary>
+    public int NameTags { get; set; } = 1;
 }
 
 /// <summary>One of a walker's (up to 3) monsters entered into ranked, and how it fights when attacked.</summary>
@@ -790,6 +793,9 @@ public class WalkingMonster
     /// <summary>Ranked fights this monster has won and lost (attacking or defending) - its leaderboard record.</summary>
     public int RankedWins { get; set; }
     public int RankedLosses { get; set; }
+
+    /// <summary>The name its walker gave it with a Name Tag (word-filtered). Empty = its species name.</summary>
+    public string Nickname { get; set; } = "";
 }
 
 /// <summary>How many of each species have ever been found (for serial numbers).</summary>

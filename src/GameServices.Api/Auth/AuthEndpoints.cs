@@ -1,3 +1,4 @@
+using GameServices.Api.Moderation;
 using System.Net.Mail;
 using System.Security.Claims;
 using System.Text.RegularExpressions;
@@ -280,6 +281,10 @@ public static partial class AuthEndpoints
         if (request == null || string.IsNullOrWhiteSpace(request.Username) || !UsernameRule().IsMatch(request.Username.Trim()))
         {
             problems["username"] = new[] { "Username must be 3-20 characters: letters, numbers or underscore." };
+        }
+        else if (!ContentFilter.IsCleanName(request.Username.Trim()))
+        {
+            problems["username"] = new[] { "That username isn't allowed - please pick another." };
         }
 
         if (string.IsNullOrEmpty(request?.Password) || request.Password.Length < 8)

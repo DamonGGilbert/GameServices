@@ -1,3 +1,4 @@
+using GameServices.Api.Moderation;
 using System.Security.Claims;
 using System.Text.RegularExpressions;
 using GameServices.Api.Catalog;
@@ -153,8 +154,11 @@ public static partial class GuildEndpoints
         Dictionary<string, string[]> problems = new();
 
         if (!NameRule().IsMatch(name)) problems["name"] = new[] { "Guild names are 3-20 letters, numbers or spaces." };
+        else if (!ContentFilter.IsCleanName(name)) problems["name"] = new[] { "That guild name isn't allowed - please pick another." };
         if (!TagRule().IsMatch(tag)) problems["tag"] = new[] { "The tag is 2-4 letters or numbers." };
+        else if (!ContentFilter.IsCleanName(tag)) problems["tag"] = new[] { "That tag isn't allowed - please pick another." };
         if (description.Length > 140) problems["description"] = new[] { "The description can be at most 140 characters." };
+        else if (!ContentFilter.IsClean(description)) problems["description"] = new[] { "Please keep the description friendly." };
 
         if (problems.Count > 0)
         {
@@ -262,8 +266,11 @@ public static partial class GuildEndpoints
         bool tagChanges = newTag != null && !string.Equals(newTag, guild.Tag, StringComparison.OrdinalIgnoreCase);
 
         if (nameChanges && !NameRule().IsMatch(newName!)) problems["name"] = new[] { "Guild names are 3-20 letters, numbers or spaces." };
+        else if (nameChanges && !ContentFilter.IsCleanName(newName)) problems["name"] = new[] { "That guild name isn't allowed - please pick another." };
         if (tagChanges && !TagRule().IsMatch(newTag!)) problems["tag"] = new[] { "The tag is 2-4 letters or numbers." };
+        else if (tagChanges && !ContentFilter.IsCleanName(newTag)) problems["tag"] = new[] { "That tag isn't allowed - please pick another." };
         if (newDescription != null && newDescription.Length > 140) problems["description"] = new[] { "The description can be at most 140 characters." };
+        else if (newDescription != null && !ContentFilter.IsClean(newDescription)) problems["description"] = new[] { "Please keep the description friendly." };
 
         // Banner styles are unlocked by the guild's tier (its rating and war wins).
         if (request?.BannerStyle != null)
@@ -757,7 +764,8 @@ public static partial class GuildEndpoints
             return Results.Problem("Slow down! You're sending messages too fast.", statusCode: StatusCodes.Status429TooManyRequests);
         }
 
-        GuildMessage message = new() { GuildId = membership.GuildId, SenderId = me, Text = text };
+        // Swearing, slurs and hate are starred out before anyone sees them.
+        GuildMessage message = new() { GuildId = membership.GuildId, SenderId = me, Text = ContentFilter.Censor(text) };
         db.GuildMessages.Add(message);
         await db.SaveChangesAsync(cancel);
 

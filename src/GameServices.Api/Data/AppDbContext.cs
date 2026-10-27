@@ -353,6 +353,8 @@ public class AppDbContext : DbContext
             e.HasOne<WalkingMonster>().WithMany().HasForeignKey(x => x.MonsterId).OnDelete(DeleteBehavior.Cascade);
         });
 
+        model.Entity<WalkingMonster>().Property(x => x.Nickname).HasMaxLength(32);
+
         model.Entity<Challenge>(c =>
         {
             c.HasKey(x => x.Id);

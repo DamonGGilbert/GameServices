@@ -13,7 +13,8 @@ public record PlayerBoardDto(string Season, string SeasonName, DateTime SeasonEn
 
 /// <summary>A monster on the board, with its recipe so the phone can draw its card.</summary>
 public record MonsterBoardRowDto(int Place, Guid MonsterId, Guid OwnerId, string OwnerName, string SpeciesId, long Seed, int RarityTier, int Level,
-    int TrainedPower, int TrainedGuard, int TrainedTricks, int TrainedWits, int Bst, int Wins, int Losses, int Score, bool IsMine, string OwnerCountry = "");
+    int TrainedPower, int TrainedGuard, int TrainedTricks, int TrainedWits, int Bst, int Wins, int Losses, int Score, bool IsMine, string OwnerCountry = "",
+    string Nickname = "");
 
 public record SeasonRewardDto(string Season, string SeasonName, string Tier, int Points, int Place, int Glimmer, string Title, bool Claimed, bool CanClaim);
 
@@ -123,7 +124,7 @@ public static class RankedLeaderboards
         return Results.Ok(scored.Select((x, i) => new MonsterBoardRowDto(i + 1, x.Monster.Id, x.Monster.OwnerId, names.GetValueOrDefault(x.Monster.OwnerId, "A walker"),
             x.Monster.SpeciesId, x.Monster.Seed, x.Monster.RarityTier, x.Monster.Level, x.Monster.TrainedPower, x.Monster.TrainedGuard,
             x.Monster.TrainedTricks, x.Monster.TrainedWits, x.Bst, x.Monster.RankedWins, x.Monster.RankedLosses, x.Score, x.Monster.OwnerId == me,
-            countries.GetValueOrDefault(x.Monster.OwnerId, "") ?? "")).ToList());
+            countries.GetValueOrDefault(x.Monster.OwnerId, "") ?? "", x.Monster.Nickname ?? "")).ToList());
     }
 
     private static async Task<IResult> Season(ClaimsPrincipal principal, AppDbContext db, CancellationToken cancel)

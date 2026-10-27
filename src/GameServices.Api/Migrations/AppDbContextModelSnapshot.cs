@@ -1560,6 +1560,11 @@ namespace GameServices.Api.Migrations
                     b.Property<int>("Level")
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("Nickname")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
                     b.Property<Guid>("OwnerId")
                         .HasColumnType("TEXT");
 
@@ -1653,6 +1658,9 @@ namespace GameServices.Api.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<long>("LifetimeSteps")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("NameTags")
                         .HasColumnType("INTEGER");
 
                     b.Property<string>("PacksDay")

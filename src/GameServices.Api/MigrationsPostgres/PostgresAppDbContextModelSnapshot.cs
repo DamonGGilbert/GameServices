@@ -1571,6 +1571,11 @@ namespace GameServices.Api.MigrationsPostgres
                     b.Property<int>("Level")
                         .HasColumnType("integer");
 
+                    b.Property<string>("Nickname")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
                     b.Property<Guid>("OwnerId")
                         .HasColumnType("uuid");
 
@@ -1665,6 +1670,9 @@ namespace GameServices.Api.MigrationsPostgres
 
                     b.Property<long>("LifetimeSteps")
                         .HasColumnType("bigint");
+
+                    b.Property<int>("NameTags")
+                        .HasColumnType("integer");
 
                     b.Property<string>("PacksDay")
                         .IsRequired()
