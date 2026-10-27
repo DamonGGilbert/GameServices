@@ -630,6 +630,10 @@ public class Challenge
     public int ToTricks { get; set; }
     public int ToWits { get; set; }
     public int ToBst { get; set; }
+
+    // Their names (Name Tags) when they fought, so a replay shows the names they had then.
+    public string FromNickname { get; set; } = "";
+    public string ToNickname { get; set; } = "";
 }
 
 /// <summary>A walker's ranked season (one calendar month): points, record and whether its reward was collected.</summary>

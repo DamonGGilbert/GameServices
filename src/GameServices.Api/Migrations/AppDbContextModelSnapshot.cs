@@ -120,6 +120,11 @@ namespace GameServices.Api.Migrations
                     b.Property<Guid>("FromMonsterId")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("FromNickname")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
                     b.Property<int>("FromPointsChange")
                         .HasColumnType("INTEGER");
 
@@ -189,6 +194,11 @@ namespace GameServices.Api.Migrations
                         .HasColumnType("INTEGER");
 
                     b.Property<Guid?>("ToMonsterId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ToNickname")
+                        .IsRequired()
+                        .HasMaxLength(32)
                         .HasColumnType("TEXT");
 
                     b.Property<int>("ToPointsChange")

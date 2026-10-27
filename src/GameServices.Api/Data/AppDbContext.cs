@@ -360,6 +360,8 @@ public class AppDbContext : DbContext
             c.HasKey(x => x.Id);
             c.Property(x => x.FromSpeciesId).HasMaxLength(32);
             c.Property(x => x.ToSpeciesId).HasMaxLength(32);
+            c.Property(x => x.FromNickname).HasMaxLength(32);
+            c.Property(x => x.ToNickname).HasMaxLength(32);
             c.HasIndex(x => new { x.ToUserId, x.Status });
             c.HasIndex(x => new { x.FromUserId, x.Status });
             c.HasOne<User>().WithMany().HasForeignKey(x => x.FromUserId).OnDelete(DeleteBehavior.Cascade);

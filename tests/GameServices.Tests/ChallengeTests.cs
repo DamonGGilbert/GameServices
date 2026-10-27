@@ -150,6 +150,29 @@ public class ChallengeTests : IClassFixture<ApiFactory>
         Assert.Equal(0, await Glimmer(alice) + await Glimmer(bob));
     }
 
+    [Fact]
+    public async Task Named_monsters_keep_their_names_in_challenges()
+    {
+        Player alice = await NewPlayer(), bob = await NewPlayer();
+        Guid a = await Monster(alice, 71, 10), b = await Monster(bob, 72, 10);
+        await WithDb(async db =>
+        {
+            (await db.WalkingMonsters.FirstAsync(m => m.Id == a)).Nickname = "Sparky";
+            (await db.WalkingMonsters.FirstAsync(m => m.Id == b)).Nickname = "Bolt";
+        });
+
+        ChallengeDto sent = await Send(alice, bob, a, 0);
+        Assert.Equal("Sparky", Assert.Single((await List(bob)).Incoming).FromMonster.Nickname);
+
+        ChallengeDto result = await Accept(bob, sent.Id, b);
+        Assert.Equal("Sparky", result.FromMonster.Nickname);
+        Assert.Equal("Bolt", result.ToMonster!.Nickname);
+
+        // Renamed afterwards: the replay still shows the names they had when they fought.
+        await WithDb(async db => (await db.WalkingMonsters.FirstAsync(m => m.Id == a)).Nickname = "Zappy");
+        Assert.Equal("Sparky", Assert.Single((await List(alice)).Recent).FromMonster.Nickname);
+    }
+
     // ------------------------------------------------------------------ ranked or friendly
 
     [Fact]

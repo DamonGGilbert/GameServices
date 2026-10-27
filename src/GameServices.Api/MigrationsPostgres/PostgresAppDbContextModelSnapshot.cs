@@ -125,6 +125,11 @@ namespace GameServices.Api.MigrationsPostgres
                     b.Property<Guid>("FromMonsterId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("FromNickname")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
                     b.Property<int>("FromPointsChange")
                         .HasColumnType("integer");
 
@@ -195,6 +200,11 @@ namespace GameServices.Api.MigrationsPostgres
 
                     b.Property<Guid?>("ToMonsterId")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("ToNickname")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
 
                     b.Property<int>("ToPointsChange")
                         .HasColumnType("integer");

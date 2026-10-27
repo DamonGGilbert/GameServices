@@ -15,9 +15,12 @@ public record ChallengeAcceptRequest(Guid MonsterId, string Strategy);
 
 public record CountryRequest(string Country);
 
-/// <summary>A monster in a challenge: its recipe (so the phone can draw the card) and its stats as the server worked them out.</summary>
+/// <summary>
+/// A monster in a challenge: its recipe (so the phone can draw the card), its stats as the server worked them out, and
+/// the name its walker gave it ("" = its species name).
+/// </summary>
 public record ChallengeMonsterDto(Guid Id, string SpeciesId, long Seed, int RarityTier, int Level,
-    int TrainedPower, int TrainedGuard, int TrainedTricks, int TrainedWits, int Bst, int[] Stats);
+    int TrainedPower, int TrainedGuard, int TrainedTricks, int TrainedWits, int Bst, int[] Stats, string Nickname = "");
 
 /// <summary>How it went: enough to replay the fight with the game's own duel rules (challenger as the first side).</summary>
 public record ChallengeFightDto(long Seed, string FromStrategy, string ToStrategy, float Chance, float Roll, bool FromWon);
@@ -246,6 +249,8 @@ public static class ChallengeEndpoints
         c.ToSpeciesId = to.SpeciesId; c.ToSeed = to.Seed; c.ToTier = to.RarityTier; c.ToLevel = to.Level;
         c.ToTrainedPower = to.TrainedPower; c.ToTrainedGuard = to.TrainedGuard; c.ToTrainedTricks = to.TrainedTricks; c.ToTrainedWits = to.TrainedWits;
         c.ToPower = ts.Power; c.ToGuard = ts.Guard; c.ToTricks = ts.Tricks; c.ToWits = ts.Wits; c.ToBst = ts.Total;
+        c.FromNickname = from.Nickname ?? "";
+        c.ToNickname = to.Nickname ?? "";
     }
 
     // ------------------------------------------------------------------ decline, cancel, expire
@@ -328,9 +333,9 @@ public static class ChallengeEndpoints
         if (c.Status == ChallengeStatus.Fought)
         {
             from = new ChallengeMonsterDto(c.FromMonsterId, c.FromSpeciesId, c.FromSeed, c.FromTier, c.FromLevel, c.FromTrainedPower, c.FromTrainedGuard,
-                c.FromTrainedTricks, c.FromTrainedWits, c.FromBst, new[] { c.FromPower, c.FromGuard, c.FromTricks, c.FromWits });
+                c.FromTrainedTricks, c.FromTrainedWits, c.FromBst, new[] { c.FromPower, c.FromGuard, c.FromTricks, c.FromWits }, c.FromNickname ?? "");
             to = new ChallengeMonsterDto(c.ToMonsterId ?? Guid.Empty, c.ToSpeciesId, c.ToSeed, c.ToTier, c.ToLevel, c.ToTrainedPower, c.ToTrainedGuard,
-                c.ToTrainedTricks, c.ToTrainedWits, c.ToBst, new[] { c.ToPower, c.ToGuard, c.ToTricks, c.ToWits });
+                c.ToTrainedTricks, c.ToTrainedWits, c.ToBst, new[] { c.ToPower, c.ToGuard, c.ToTricks, c.ToWits }, c.ToNickname ?? "");
             fight = new ChallengeFightDto(c.Seed, ((DuelStrategy)c.FromStrategy).ToString(), ((DuelStrategy)c.ToStrategy).ToString(), c.Chance, c.Roll, c.FromWon);
             iWon = incoming ? !c.FromWon : c.FromWon;
             myPoints = incoming ? c.ToPointsChange : c.FromPointsChange;
@@ -341,7 +346,7 @@ public static class ChallengeEndpoints
             if (!monsters.TryGetValue(c.FromMonsterId, out WalkingMonster? m)) return null;
             MonsterBattleStats s = RankedEndpoints.StatsOf(catalog, m);
             from = new ChallengeMonsterDto(m.Id, m.SpeciesId, m.Seed, m.RarityTier, m.Level, m.TrainedPower, m.TrainedGuard, m.TrainedTricks, m.TrainedWits,
-                s.Total, new[] { s.Power, s.Guard, s.Tricks, s.Wits });
+                s.Total, new[] { s.Power, s.Guard, s.Tricks, s.Wits }, m.Nickname ?? "");
         }
 
         return new ChallengeDto(c.Id, incoming, other, otherName, otherCountry, c.Stake, c.Status.ToString(), c.CreatedUtc, c.ExpiresUtc,
