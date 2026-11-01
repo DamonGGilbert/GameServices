@@ -98,6 +98,7 @@ public static class WalkingEndpoints
 
         // Safe walking loops with bonus rewards (Walking/Routes).
         group.MapRouteEndpoints();
+        group.MapPublicProfileEndpoints();
 
         group.MapGet("/races", MyRaces);
         group.MapPost("/races", Challenge);

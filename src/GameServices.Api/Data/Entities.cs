@@ -496,6 +496,9 @@ public class WalkingProfile
 
     /// <summary>Name Tags held: each renames one monster (see Walking/Monsters/MonsterNames). Everyone starts with one.</summary>
     public int NameTags { get; set; } = 1;
+
+    /// <summary>Who can see this walker's Steplings on their public profile (Walking/PublicProfiles): 0 everyone, 1 friends, 2 nobody.</summary>
+    public int MonsterVisibility { get; set; }
 }
 
 /// <summary>One of a walker's (up to 3) monsters entered into ranked, and how it fights when attacked.</summary>
@@ -585,6 +588,9 @@ public class Challenge
     public Guid ToUserId { get; set; }
     public Guid FromMonsterId { get; set; }
     public int FromStrategy { get; set; }
+
+    /// <summary>The monster of theirs the challenger picked out on their profile ("I want to fight your Sparky"), if any.</summary>
+    public Guid? RequestedMonsterId { get; set; }
     public int Stake { get; set; }
     public ChallengeStatus Status { get; set; } = ChallengeStatus.Pending;
     public DateTime CreatedUtc { get; set; } = DateTime.UtcNow;

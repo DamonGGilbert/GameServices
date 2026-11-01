@@ -9,7 +9,8 @@ using Microsoft.EntityFrameworkCore;
 
 namespace GameServices.Api.Walking.Ranked;
 
-public record ChallengeSendRequest(string? ToUsername, Guid? ToUserId, Guid MonsterId, int Stake, string Strategy);
+/// <param name="TargetMonsterId">One of their monsters picked out on their profile (only if they let you see their Steplings).</param>
+public record ChallengeSendRequest(string? ToUsername, Guid? ToUserId, Guid MonsterId, int Stake, string Strategy, Guid? TargetMonsterId = null);
 
 public record ChallengeAcceptRequest(Guid MonsterId, string Strategy);
 
@@ -27,7 +28,7 @@ public record ChallengeFightDto(long Seed, string FromStrategy, string ToStrateg
 
 public record ChallengeDto(Guid Id, bool Incoming, Guid OtherUserId, string OtherName, string OtherCountry, int Stake, string Status,
     DateTime CreatedUtc, DateTime ExpiresUtc, ChallengeMonsterDto FromMonster, ChallengeMonsterDto? ToMonster,
-    bool Ranked, bool IWon, int MyPointsChange, int GlimmerChange, ChallengeFightDto? Fight);
+    bool Ranked, bool IWon, int MyPointsChange, int GlimmerChange, ChallengeFightDto? Fight, Guid? RequestedMonsterId = null);
 
 public record ChallengeListDto(List<ChallengeDto> Incoming, List<ChallengeDto> Outgoing, List<ChallengeDto> Recent, string MyCountry);
 
@@ -46,6 +47,8 @@ public record ChallengeListDto(List<ChallengeDto> Incoming, List<ChallengeDto> O
 ///   * The fight uses the ranked rules (no tonic, walking bonus or arena). If the two monsters are within 25% BST of
 ///     each other it's RANKED - points and monster records move as in a ranked fight - otherwise it's a friendly.
 ///   * Not yourself, never anyone blocked either way; up to 5 sent and 20 waiting at once; stakes up to 1,000.
+///   * You can pick out one of their monsters from their public profile (if they let you see their Steplings) - it's
+///     offered first when they answer, but they choose which monster fights.
 /// </summary>
 public static class ChallengeEndpoints
 {
@@ -115,6 +118,13 @@ public static class ChallengeEndpoints
         WalkingMonster? monster = await db.WalkingMonsters.AsNoTracking().FirstOrDefaultAsync(m => m.Id == request.MonsterId && m.OwnerId == me, cancel);
         if (monster == null) return Problem("Pick one of your own monsters.");
 
+        // Picking out one of their monsters: it must be theirs, and they must let you see their Steplings.
+        if (request.TargetMonsterId is Guid target)
+        {
+            bool theirs = await db.WalkingMonsters.AnyAsync(m => m.Id == target && m.OwnerId == to.Id, cancel);
+            if (!theirs || !await PublicProfiles.CanSeeMonsters(db, me, to.Id, cancel)) return Problem("You can't pick out that monster.");
+        }
+
         await ExpireAsync(db, me, cancel);
         if (await db.Challenges.CountAsync(c => c.FromUserId == me && c.Status == ChallengeStatus.Pending, cancel) >= MaxOpenSent)
         {
@@ -139,6 +149,7 @@ public static class ChallengeEndpoints
         var challenge = new Challenge
         {
             FromUserId = me, ToUserId = to.Id, FromMonsterId = monster.Id, FromStrategy = (int)strategy, Stake = request.Stake,
+            RequestedMonsterId = request.TargetMonsterId,
             CreatedUtc = now, ExpiresUtc = now + Lifetime,
         };
         db.Challenges.Add(challenge);
@@ -350,6 +361,6 @@ public static class ChallengeEndpoints
         }
 
         return new ChallengeDto(c.Id, incoming, other, otherName, otherCountry, c.Stake, c.Status.ToString(), c.CreatedUtc, c.ExpiresUtc,
-            from, to, c.Ranked, iWon, myPoints, glimmer, fight);
+            from, to, c.Ranked, iWon, myPoints, glimmer, fight, c.RequestedMonsterId);
     }
 }

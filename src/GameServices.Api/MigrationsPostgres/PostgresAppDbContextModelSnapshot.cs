@@ -177,6 +177,9 @@ namespace GameServices.Api.MigrationsPostgres
                     b.Property<bool>("Ranked")
                         .HasColumnType("boolean");
 
+                    b.Property<Guid?>("RequestedMonsterId")
+                        .HasColumnType("uuid");
+
                     b.Property<float>("Roll")
                         .HasColumnType("real");
 
@@ -1680,6 +1683,9 @@ namespace GameServices.Api.MigrationsPostgres
 
                     b.Property<long>("LifetimeSteps")
                         .HasColumnType("bigint");
+
+                    b.Property<int>("MonsterVisibility")
+                        .HasColumnType("integer");
 
                     b.Property<int>("NameTags")
                         .HasColumnType("integer");
