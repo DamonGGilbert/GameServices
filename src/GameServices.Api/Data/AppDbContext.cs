@@ -54,6 +54,7 @@ public class AppDbContext : DbContext
     public DbSet<MonsterSpeciesCount> MonsterSpeciesCounts => Set<MonsterSpeciesCount>();
     public DbSet<WalkingLedgerEntry> WalkingLedger => Set<WalkingLedgerEntry>();
     public DbSet<MonsterOffer> MonsterOffers => Set<MonsterOffer>();
+    public DbSet<MonsterSwap> MonsterSwaps => Set<MonsterSwap>();
     public DbSet<WalkingRoute> WalkingRoutes => Set<WalkingRoute>();
     public DbSet<RankedEntry> RankedEntries => Set<RankedEntry>();
     public DbSet<RankedMatch> RankedMatches => Set<RankedMatch>();
@@ -342,6 +343,17 @@ public class AppDbContext : DbContext
             o.HasIndex(x => new { x.FromUserId, x.Status });
             o.HasIndex(x => new { x.MonsterId, x.Status });
             o.HasOne<WalkingMonster>().WithMany().HasForeignKey(x => x.MonsterId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        model.Entity<MonsterSwap>(s =>
+        {
+            s.HasKey(x => x.Id);
+            s.HasIndex(x => new { x.ToUserId, x.Status });
+            s.HasIndex(x => new { x.FromUserId, x.Status });
+            s.HasIndex(x => x.FromMonsterId);
+            s.HasIndex(x => x.ToMonsterId);
+            s.HasOne<WalkingMonster>().WithMany().HasForeignKey(x => x.FromMonsterId).OnDelete(DeleteBehavior.Cascade);
+            s.HasOne<WalkingMonster>().WithMany().HasForeignKey(x => x.ToMonsterId).OnDelete(DeleteBehavior.Cascade);
         });
 
         model.Entity<RankedEntry>(e =>

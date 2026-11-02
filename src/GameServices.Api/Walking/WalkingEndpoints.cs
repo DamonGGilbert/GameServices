@@ -88,11 +88,12 @@ public static class WalkingEndpoints
         // Walking guilds: the weekly Guild Journey, the weekend step race and the ranking (WalkingGuilds.cs).
         group.MapWalkingGuildEndpoints();
 
-        // Monsters, made on the server and found (very rarely) by walking (Walking/Monsters), packs, offers between
-        // friends, and the Glimmer that pays for them (Walking/Wallet).
+        // Monsters, made on the server and found (very rarely) by walking (Walking/Monsters), packs, offers and the
+        // Daily Swap between friends, and the Glimmer that pays for them (Walking/Wallet).
         group.MapWalkingMonsterEndpoints();
         group.MapWalkingPackEndpoints();
         group.MapMonsterOfferEndpoints();
+        group.MapMonsterSwapEndpoints();
         group.MapWalkingWalletEndpoints();
         GameServices.Api.Walking.Ranked.RankedEndpoints.MapRankedEndpoints(group);
 

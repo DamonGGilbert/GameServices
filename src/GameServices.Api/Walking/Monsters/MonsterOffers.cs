@@ -27,8 +27,8 @@ public record OfferDto(Guid Id, Guid MonsterId, string SpeciesId, int RarityTier
 ///   * a monster must have been with its owner for 3 days first (no quick flipping)
 ///   * prices are kept within limits for its rarity (no "1 Glimmer" tricks, no funnelling Glimmer to a friend)
 ///   * at most 3 trades a week each, 5 open offers each, and offers expire after 2 days (Glimmer returned)
-/// When an offer is accepted the monster - with its level and training - moves to its new walker, the seller gets the
-/// Glimmer, and any other offers for it are turned down and refunded.
+/// When an offer is accepted the monster - with its level and training - moves to its new walker (MonsterHandover), the
+/// seller gets the Glimmer, and any other offers for it are turned down and refunded.
 /// </summary>
 public static class MonsterOffers
 {
@@ -150,20 +150,13 @@ public static class MonsterOffers
         if (await TradesThisWeek(db, me, now, cancel) >= MaxTradesPerWeek) return Problem($"That's {MaxTradesPerWeek} trades this week for you.");
         if (await TradesThisWeek(db, offer.FromUserId, now, cancel) >= MaxTradesPerWeek) return Problem("Your friend has made all their trades for this week.");
 
-        // The monster - level, training and all - moves to its new walker.
-        monster.OwnerId = offer.FromUserId;
-        monster.AcquiredUtc = now;
-        monster.TradeCount++;
-        monster.ArrivedFromUserId = me;
-        monster.Seen = false;   // so its new walker gets a welcome reveal
-
         offer.Status = OfferStatus.Accepted;
         offer.DecidedUtc = now;
         WalkingWallet.Change(db, seller, offer.Price, "offer-sold", "A monster found a new home");
 
-        // Anyone else who offered for it gets their Glimmer back.
-        List<MonsterOffer> others = await db.MonsterOffers.Where(o => o.MonsterId == monster.Id && o.Status == OfferStatus.Pending && o.Id != offer.Id).ToListAsync(cancel);
-        foreach (MonsterOffer other in others) await Refund(db, other, OfferStatus.Declined, now, cancel);
+        // The monster - level, training and all - moves to its new walker; anyone else who offered for it gets their
+        // Glimmer back.
+        await MonsterHandover.Move(db, monster, offer.FromUserId, now, offer.Id, null, cancel);
 
         await db.SaveChangesAsync(cancel);
         return Results.Ok(await ToDto(db, offer, me, cancel));
@@ -185,7 +178,7 @@ public static class MonsterOffers
         return Results.Ok(await ToDto(db, offer, me, cancel));
     }
 
-    private static async Task Refund(AppDbContext db, MonsterOffer offer, OfferStatus status, DateTime now, CancellationToken cancel)
+    internal static async Task Refund(AppDbContext db, MonsterOffer offer, OfferStatus status, DateTime now, CancellationToken cancel)
     {
         offer.Status = status;
         offer.DecidedUtc = now;

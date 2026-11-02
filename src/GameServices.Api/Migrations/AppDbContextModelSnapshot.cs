@@ -877,6 +877,49 @@ namespace GameServices.Api.Migrations
                     b.ToTable("MonsterSpeciesCounts");
                 });
 
+            modelBuilder.Entity("GameServices.Api.Data.MonsterSwap", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("DecidedUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("ExpiresUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("FromMonsterId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("FromUserId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("ToMonsterId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ToUserId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FromMonsterId");
+
+                    b.HasIndex("ToMonsterId");
+
+                    b.HasIndex("FromUserId", "Status");
+
+                    b.HasIndex("ToUserId", "Status");
+
+                    b.ToTable("MonsterSwaps");
+                });
+
             modelBuilder.Entity("GameServices.Api.Data.OpponentReward", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1998,6 +2041,21 @@ namespace GameServices.Api.Migrations
                     b.HasOne("GameServices.Api.Data.WalkingMonster", null)
                         .WithMany()
                         .HasForeignKey("MonsterId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("GameServices.Api.Data.MonsterSwap", b =>
+                {
+                    b.HasOne("GameServices.Api.Data.WalkingMonster", null)
+                        .WithMany()
+                        .HasForeignKey("FromMonsterId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("GameServices.Api.Data.WalkingMonster", null)
+                        .WithMany()
+                        .HasForeignKey("ToMonsterId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

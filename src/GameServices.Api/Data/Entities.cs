@@ -843,6 +843,25 @@ public class MonsterOffer
     public DateTime? DecidedUtc { get; set; }
 }
 
+/// <summary>Closed = one of the two monsters went to a new home another way first.</summary>
+public enum SwapStatus { Pending = 0, Done = 1, Declined = 2, Cancelled = 3, Expired = 4, Closed = 5 }
+
+/// <summary>A Daily Swap: one walker's monster for a friend's (see Walking/Monsters/MonsterSwaps).</summary>
+public class MonsterSwap
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid FromUserId { get; set; }
+    public Guid ToUserId { get; set; }
+    /// <summary>The asker's monster.</summary>
+    public Guid FromMonsterId { get; set; }
+    /// <summary>The friend's monster they'd like in return.</summary>
+    public Guid ToMonsterId { get; set; }
+    public SwapStatus Status { get; set; } = SwapStatus.Pending;
+    public DateTime CreatedUtc { get; set; } = DateTime.UtcNow;
+    public DateTime ExpiresUtc { get; set; }
+    public DateTime? DecidedUtc { get; set; }
+}
+
 public enum RouteStatus { Active = 0, Completed = 1, Abandoned = 2, Expired = 3 }
 
 /// <summary>A safe walking loop planned for one walker (see Walking/Routes).</summary>
