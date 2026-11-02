@@ -12,7 +12,7 @@ namespace GameServices.Api.Auth;
 /// <summary>
 /// The HTTP endpoints for accounts:
 ///   POST /api/auth/register   create an account
-///   POST /api/auth/login      sign in
+///   POST /api/auth/login      sign in (username OR email)
 ///   POST /api/auth/refresh    swap a refresh token for a new access token
 ///   POST /api/auth/logout     sign out (revokes the refresh token)
 ///   GET  /api/me              who am I? (needs a valid access token)
@@ -64,12 +64,12 @@ public static partial class AuthEndpoints
         // 2. Friendly duplicate check (the unique index below is the real safety net).
         if (await db.Users.AnyAsync(u => u.NormalizedUsername == normalizedUsername, cancel))
         {
-            return Results.Problem("That username is already taken.", statusCode: StatusCodes.Status409Conflict);
+            return Problem("That username is already taken. If it is yours, sign in instead - one account works in all our games.", StatusCodes.Status409Conflict, "username_taken");
         }
 
         if (normalizedEmail != null && await db.Users.AnyAsync(u => u.NormalizedEmail == normalizedEmail, cancel))
         {
-            return Results.Problem("That email is already registered.", statusCode: StatusCodes.Status409Conflict);
+            return Problem("You already have an account. Sign in instead. (One account works in all our games - use the same username and password.)", StatusCodes.Status409Conflict, "email_already_registered");
         }
 
         // 3. Create the account. Only the HASH of the password is stored.
@@ -95,7 +95,7 @@ public static partial class AuthEndpoints
         {
             // Two people registered the same name at the same instant: the database
             // unique index rejected the second one.
-            return Results.Problem("That username or email is already taken.", statusCode: StatusCodes.Status409Conflict);
+            return Problem("That username or email already has an account. Try signing in instead.", StatusCodes.Status409Conflict, "account_exists");
         }
 
         return Results.Created($"/api/me", response);
@@ -111,12 +111,15 @@ public static partial class AuthEndpoints
         IPasswordHasher<User> hasher,
         CancellationToken cancel)
     {
+        // Players can type either their username or their email address.
         string normalized = (request.Username ?? "").Trim().ToUpperInvariant();
-        User? user = await db.Users.FirstOrDefaultAsync(u => u.NormalizedUsername == normalized, cancel);
+        User? user = normalized.Contains('@')
+            ? await db.Users.FirstOrDefaultAsync(u => u.NormalizedEmail == normalized, cancel)
+            : await db.Users.FirstOrDefaultAsync(u => u.NormalizedUsername == normalized, cancel);
 
         // The SAME vague answer whether the username or the password was wrong,
         // so attackers can't use this to discover which usernames exist.
-        IResult invalid = Results.Problem("Invalid username or password.", statusCode: StatusCodes.Status401Unauthorized);
+        IResult invalid = Problem("That username (or email) and password do not match. Check them, or use \"Forgot password\". One account works in all our games.", StatusCodes.Status401Unauthorized, "invalid_credentials");
 
         if (user == null)
         {
@@ -274,22 +277,29 @@ public static partial class AuthEndpoints
         return dummyHash ??= hasher.HashPassword(new User(), "not-a-real-password");
     }
 
+    // Every problem carries a short "code" next to the readable message, so a game can react
+    // (for example, flip to its sign-in form on "email_already_registered") without reading English.
+    private static IResult Problem(string message, int status, string code)
+    {
+        return Results.Problem(message, statusCode: status, extensions: new Dictionary<string, object?> { ["code"] = code });
+    }
+
     private static Dictionary<string, string[]> Validate(RegisterRequest request)
     {
         Dictionary<string, string[]> problems = new();
 
         if (request == null || string.IsNullOrWhiteSpace(request.Username) || !UsernameRule().IsMatch(request.Username.Trim()))
         {
-            problems["username"] = new[] { "Username must be 3-20 characters: letters, numbers or underscore." };
+            problems["username"] = new[] { "Usernames are 3-20 characters long: letters, numbers or underscores only (no spaces)." };
         }
         else if (!ContentFilter.IsCleanName(request.Username.Trim()))
         {
-            problems["username"] = new[] { "That username isn't allowed - please pick another." };
+            problems["username"] = new[] { "That username isn't allowed. Please pick a different one." };
         }
 
         if (string.IsNullOrEmpty(request?.Password) || request.Password.Length < 8)
         {
-            problems["password"] = new[] { "Password must be at least 8 characters." };
+            problems["password"] = new[] { "Your password needs at least 8 characters." };
         }
         else if (request.Password.Length > 100)
         {
@@ -304,7 +314,7 @@ public static partial class AuthEndpoints
 
             if (!valid)
             {
-                problems["email"] = new[] { "That doesn't look like a valid email address." };
+                problems["email"] = new[] { "That doesn't look like a valid email address. Check for typos, e.g. name@example.com." };
             }
         }
 

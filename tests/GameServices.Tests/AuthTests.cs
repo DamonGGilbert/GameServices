@@ -61,6 +61,33 @@ public class AuthTests : IClassFixture<ApiFactory>
         Assert.Equal(HttpStatusCode.Conflict, duplicate.StatusCode);
     }
 
+    [Fact]
+    public async Task Registering_an_email_that_already_has_an_account_says_to_sign_in()
+    {
+        string email = UniqueName().ToLowerInvariant() + "@example.com";
+        await Register(UniqueName(), email: email);
+
+        HttpResponseMessage again = await Register(UniqueName(), email: email.ToUpperInvariant());
+
+        Assert.Equal(HttpStatusCode.Conflict, again.StatusCode);
+        string body = await again.Content.ReadAsStringAsync();
+        Assert.Contains("You already have an account. Sign in instead.", body);
+        Assert.Contains("email_already_registered", body);
+    }
+
+    [Fact]
+    public async Task You_can_sign_in_with_your_email_instead_of_your_username()
+    {
+        string name = UniqueName();
+        string email = name.ToLowerInvariant() + "@example.com";
+        await Register(name, email: email);
+
+        HttpResponseMessage response = await Login(email, "CorrectHorse1");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await Login(email, "WrongPassword9")).StatusCode);
+    }
+
     [Theory]
     [InlineData("ab", "CorrectHorse1")]          // username too short
     [InlineData("has spaces", "CorrectHorse1")]  // bad characters
