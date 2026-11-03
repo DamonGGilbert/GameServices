@@ -169,6 +169,12 @@ namespace GameServices.Api.Migrations
                     b.Property<bool>("FromWon")
                         .HasColumnType("INTEGER");
 
+                    b.Property<bool>("PowerBattle")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("PowerMoved")
+                        .HasColumnType("INTEGER");
+
                     b.Property<bool>("Ranked")
                         .HasColumnType("INTEGER");
 
@@ -820,6 +826,104 @@ namespace GameServices.Api.Migrations
                     b.HasIndex("UserId", "CreatedUtc");
 
                     b.ToTable("Ledger");
+                });
+
+            modelBuilder.Entity("GameServices.Api.Data.MarketBid", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Amount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("BidderId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ListingId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BidderId");
+
+                    b.HasIndex("ListingId", "Amount");
+
+                    b.ToTable("MarketBids");
+                });
+
+            modelBuilder.Entity("GameServices.Api.Data.MarketListing", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("BidCount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("BoughtNow")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("BuyNowPrice")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid?>("BuyerId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("ClosedUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("CurrentBid")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("EndsUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("MonsterId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("RarityTier")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("SellerId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("SoldPrice")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("SpeciesId")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("StartPrice")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid?>("TopBidderId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MonsterId");
+
+                    b.HasIndex("SellerId", "Status");
+
+                    b.HasIndex("Status", "EndsUtc");
+
+                    b.HasIndex("TopBidderId", "Status");
+
+                    b.HasIndex("SpeciesId", "RarityTier", "Status");
+
+                    b.ToTable("MarketListings");
                 });
 
             modelBuilder.Entity("GameServices.Api.Data.MonsterOffer", b =>
@@ -1592,6 +1696,18 @@ namespace GameServices.Api.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT");
 
+                    b.Property<int>("AbsorbedGuard")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("AbsorbedPower")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("AbsorbedTricks")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("AbsorbedWits")
+                        .HasColumnType("INTEGER");
+
                     b.Property<DateTime>("AcquiredUtc")
                         .HasColumnType("TEXT");
 
@@ -1601,6 +1717,15 @@ namespace GameServices.Api.Migrations
                     b.Property<string>("BiomeId")
                         .HasMaxLength(32)
                         .HasColumnType("TEXT");
+
+                    b.Property<int>("CrystalPower")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("CrystalSteps")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("CrystalStepsLeft")
+                        .HasColumnType("INTEGER");
 
                     b.Property<int>("Experience")
                         .HasColumnType("INTEGER");
@@ -2032,6 +2157,30 @@ namespace GameServices.Api.Migrations
                     b.HasOne("GameServices.Api.Data.User", null)
                         .WithMany()
                         .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("GameServices.Api.Data.MarketBid", b =>
+                {
+                    b.HasOne("GameServices.Api.Data.MarketListing", null)
+                        .WithMany()
+                        .HasForeignKey("ListingId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("GameServices.Api.Data.MarketListing", b =>
+                {
+                    b.HasOne("GameServices.Api.Data.WalkingMonster", null)
+                        .WithMany()
+                        .HasForeignKey("MonsterId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("GameServices.Api.Data.User", null)
+                        .WithMany()
+                        .HasForeignKey("SellerId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

@@ -55,6 +55,8 @@ public class AppDbContext : DbContext
     public DbSet<WalkingLedgerEntry> WalkingLedger => Set<WalkingLedgerEntry>();
     public DbSet<MonsterOffer> MonsterOffers => Set<MonsterOffer>();
     public DbSet<MonsterSwap> MonsterSwaps => Set<MonsterSwap>();
+    public DbSet<MarketListing> MarketListings => Set<MarketListing>();
+    public DbSet<MarketBid> MarketBids => Set<MarketBid>();
     public DbSet<WalkingRoute> WalkingRoutes => Set<WalkingRoute>();
     public DbSet<RankedEntry> RankedEntries => Set<RankedEntry>();
     public DbSet<RankedMatch> RankedMatches => Set<RankedMatch>();
@@ -354,6 +356,27 @@ public class AppDbContext : DbContext
             s.HasIndex(x => x.ToMonsterId);
             s.HasOne<WalkingMonster>().WithMany().HasForeignKey(x => x.FromMonsterId).OnDelete(DeleteBehavior.Cascade);
             s.HasOne<WalkingMonster>().WithMany().HasForeignKey(x => x.ToMonsterId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        model.Entity<MarketListing>(l =>
+        {
+            l.HasKey(x => x.Id);
+            l.Property(x => x.SpeciesId).HasMaxLength(32).IsRequired();
+            l.HasIndex(x => new { x.Status, x.EndsUtc });
+            l.HasIndex(x => new { x.SellerId, x.Status });
+            l.HasIndex(x => new { x.TopBidderId, x.Status });
+            l.HasIndex(x => new { x.SpeciesId, x.RarityTier, x.Status });
+            l.HasIndex(x => x.MonsterId);
+            l.HasOne<User>().WithMany().HasForeignKey(x => x.SellerId).OnDelete(DeleteBehavior.Cascade);
+            l.HasOne<WalkingMonster>().WithMany().HasForeignKey(x => x.MonsterId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        model.Entity<MarketBid>(b =>
+        {
+            b.HasKey(x => x.Id);
+            b.HasIndex(x => new { x.ListingId, x.Amount });
+            b.HasIndex(x => x.BidderId);
+            b.HasOne<MarketListing>().WithMany().HasForeignKey(x => x.ListingId).OnDelete(DeleteBehavior.Cascade);
         });
 
         model.Entity<RankedEntry>(e =>

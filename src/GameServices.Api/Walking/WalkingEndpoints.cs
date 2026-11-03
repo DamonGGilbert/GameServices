@@ -89,11 +89,12 @@ public static class WalkingEndpoints
         group.MapWalkingGuildEndpoints();
 
         // Monsters, made on the server and found (very rarely) by walking (Walking/Monsters), packs, offers and the
-        // Daily Swap between friends, and the Glimmer that pays for them (Walking/Wallet).
+        // Daily Swap between friends, the Market between any walkers, and the Glimmer that pays for them (Walking/Wallet).
         group.MapWalkingMonsterEndpoints();
         group.MapWalkingPackEndpoints();
         group.MapMonsterOfferEndpoints();
         group.MapMonsterSwapEndpoints();
+        group.MapMonsterMarketEndpoints();
         group.MapWalkingWalletEndpoints();
         GameServices.Api.Walking.Ranked.RankedEndpoints.MapRankedEndpoints(group);
 
@@ -156,8 +157,9 @@ public static class WalkingEndpoints
             profile.FlaggedReports++;
         }
 
-        // Walking earns Glimmer (1 per 100 steps)...
+        // Walking earns Glimmer (1 per 100 steps), and brings crystals (from lost power battles) back to life...
         WalkingWallet.CreditSteps(db, profile, verdict.Added);
+        await Ranked.PowerBattles.WalkBackAsync(db, me, verdict.Added, cancel);
 
         // ...and every 5,000 accepted steps is a (small) chance of finding a monster - saved together with the steps.
         string? biome = string.IsNullOrWhiteSpace(request.Biome) ? null : request.Biome.Trim().ToLowerInvariant();

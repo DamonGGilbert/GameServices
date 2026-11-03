@@ -174,6 +174,12 @@ namespace GameServices.Api.MigrationsPostgres
                     b.Property<bool>("FromWon")
                         .HasColumnType("boolean");
 
+                    b.Property<bool>("PowerBattle")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("PowerMoved")
+                        .HasColumnType("integer");
+
                     b.Property<bool>("Ranked")
                         .HasColumnType("boolean");
 
@@ -831,6 +837,104 @@ namespace GameServices.Api.MigrationsPostgres
                     b.HasIndex("UserId", "CreatedUtc");
 
                     b.ToTable("Ledger");
+                });
+
+            modelBuilder.Entity("GameServices.Api.Data.MarketBid", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Amount")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("BidderId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("ListingId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BidderId");
+
+                    b.HasIndex("ListingId", "Amount");
+
+                    b.ToTable("MarketBids");
+                });
+
+            modelBuilder.Entity("GameServices.Api.Data.MarketListing", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("BidCount")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("BoughtNow")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("BuyNowPrice")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("BuyerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("ClosedUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("CreatedUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("CurrentBid")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("EndsUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("MonsterId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("RarityTier")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("SellerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("SoldPrice")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("SpeciesId")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<int>("StartPrice")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("TopBidderId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MonsterId");
+
+                    b.HasIndex("SellerId", "Status");
+
+                    b.HasIndex("Status", "EndsUtc");
+
+                    b.HasIndex("TopBidderId", "Status");
+
+                    b.HasIndex("SpeciesId", "RarityTier", "Status");
+
+                    b.ToTable("MarketListings");
                 });
 
             modelBuilder.Entity("GameServices.Api.Data.MonsterOffer", b =>
@@ -1603,6 +1707,18 @@ namespace GameServices.Api.MigrationsPostgres
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<int>("AbsorbedGuard")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("AbsorbedPower")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("AbsorbedTricks")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("AbsorbedWits")
+                        .HasColumnType("integer");
+
                     b.Property<DateTime>("AcquiredUtc")
                         .HasColumnType("timestamp with time zone");
 
@@ -1612,6 +1728,15 @@ namespace GameServices.Api.MigrationsPostgres
                     b.Property<string>("BiomeId")
                         .HasMaxLength(32)
                         .HasColumnType("character varying(32)");
+
+                    b.Property<int>("CrystalPower")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("CrystalSteps")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("CrystalStepsLeft")
+                        .HasColumnType("integer");
 
                     b.Property<int>("Experience")
                         .HasColumnType("integer");
@@ -2043,6 +2168,30 @@ namespace GameServices.Api.MigrationsPostgres
                     b.HasOne("GameServices.Api.Data.User", null)
                         .WithMany()
                         .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("GameServices.Api.Data.MarketBid", b =>
+                {
+                    b.HasOne("GameServices.Api.Data.MarketListing", null)
+                        .WithMany()
+                        .HasForeignKey("ListingId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("GameServices.Api.Data.MarketListing", b =>
+                {
+                    b.HasOne("GameServices.Api.Data.WalkingMonster", null)
+                        .WithMany()
+                        .HasForeignKey("MonsterId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("GameServices.Api.Data.User", null)
+                        .WithMany()
+                        .HasForeignKey("SellerId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

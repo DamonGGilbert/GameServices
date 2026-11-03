@@ -74,8 +74,12 @@ public static class RankedEndpoints
         return group;
     }
 
-    public static MonsterBattleStats StatsOf(MonsterCatalog catalog, WalkingMonster m) =>
-        MonsterStats.For(catalog, m.SpeciesId, m.Seed, m.RarityTier, m.Level, m.TrainedPower, m.TrainedGuard, m.TrainedTricks, m.TrainedWits);
+    /// <summary>A monster's battle stats: from its recipe, level and training - plus any power absorbed in power battles.</summary>
+    public static MonsterBattleStats StatsOf(MonsterCatalog catalog, WalkingMonster m)
+    {
+        MonsterBattleStats s = MonsterStats.For(catalog, m.SpeciesId, m.Seed, m.RarityTier, m.Level, m.TrainedPower, m.TrainedGuard, m.TrainedTricks, m.TrainedWits);
+        return s with { Power = s.Power + m.AbsorbedPower, Guard = s.Guard + m.AbsorbedGuard, Tricks = s.Tricks + m.AbsorbedTricks, Wits = s.Wits + m.AbsorbedWits };
+    }
 
     private static IResult Problem(string message, int status = StatusCodes.Status400BadRequest) => Results.Problem(message, statusCode: status);
 
@@ -157,6 +161,7 @@ public static class RankedEndpoints
         {
             return Problem("Enter this monster into ranked first.");
         }
+        if (PowerBattles.IsCrystal(attacker)) return Problem("That monster is a crystal after a power battle - walk to bring its power back first.");
 
         DateTime now = DateTime.UtcNow;
 
@@ -182,7 +187,7 @@ public static class RankedEndpoints
 
         var rows = await (from e in db.RankedEntries.AsNoTracking()
                           join m in db.WalkingMonsters.AsNoTracking() on e.MonsterId equals m.Id
-                          where e.UserId != me && m.OwnerId == e.UserId && !blocked.Contains(e.UserId) && !recent.Contains(m.Id)
+                          where e.UserId != me && m.OwnerId == e.UserId && !blocked.Contains(e.UserId) && !recent.Contains(m.Id) && m.CrystalStepsLeft == 0
                           select new { e, m }).ToListAsync(cancel);
         List<Candidate> candidates = rows.Select(r => new Candidate(r.e, r.m, StatsOf(catalog, r.m))).ToList();
 

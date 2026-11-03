@@ -156,7 +156,7 @@ public static class MonsterOffers
 
         // The monster - level, training and all - moves to its new walker; anyone else who offered for it gets their
         // Glimmer back.
-        await MonsterHandover.Move(db, monster, offer.FromUserId, now, offer.Id, null, cancel);
+        await MonsterHandover.Move(db, monster, offer.FromUserId, now, offer.Id, null, null, cancel);
 
         await db.SaveChangesAsync(cancel);
         return Results.Ok(await ToDto(db, offer, me, cancel));

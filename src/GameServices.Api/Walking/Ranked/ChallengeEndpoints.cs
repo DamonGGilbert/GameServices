@@ -10,7 +10,9 @@ using Microsoft.EntityFrameworkCore;
 namespace GameServices.Api.Walking.Ranked;
 
 /// <param name="TargetMonsterId">One of their monsters picked out on their profile (only if they let you see their Steplings).</param>
-public record ChallengeSendRequest(string? ToUsername, Guid? ToUserId, Guid MonsterId, int Stake, string Strategy, Guid? TargetMonsterId = null);
+/// <param name="PowerBattle">An invitation to a power battle (PowerBattles): the winner absorbs power, the loser's monster becomes a crystal.</param>
+public record ChallengeSendRequest(string? ToUsername, Guid? ToUserId, Guid MonsterId, int Stake, string Strategy, Guid? TargetMonsterId = null,
+    bool PowerBattle = false);
 
 public record ChallengeAcceptRequest(Guid MonsterId, string Strategy);
 
@@ -28,12 +30,13 @@ public record ChallengeFightDto(long Seed, string FromStrategy, string ToStrateg
 
 public record ChallengeDto(Guid Id, bool Incoming, Guid OtherUserId, string OtherName, string OtherCountry, int Stake, string Status,
     DateTime CreatedUtc, DateTime ExpiresUtc, ChallengeMonsterDto FromMonster, ChallengeMonsterDto? ToMonster,
-    bool Ranked, bool IWon, int MyPointsChange, int GlimmerChange, ChallengeFightDto? Fight, Guid? RequestedMonsterId = null);
+    bool Ranked, bool IWon, int MyPointsChange, int GlimmerChange, ChallengeFightDto? Fight, Guid? RequestedMonsterId = null,
+    bool PowerBattle = false, int PowerChange = 0);
 
 public record ChallengeListDto(List<ChallengeDto> Incoming, List<ChallengeDto> Outgoing, List<ChallengeDto> Recent, string MyCountry);
 
 /// <summary>
-/// CHALLENGES: fight any walker in the world, for an optional Glimmer stake.
+/// CHALLENGES: fight any walker in the world, for an optional Glimmer stake - and, if both agree, a POWER BATTLE.
 ///
 ///   GET  /api/walking/challenges                  waiting for me, sent by me, and recent results
 ///   POST /api/walking/challenges                  challenge someone (my monster, a stake, my secret strategy)
@@ -49,6 +52,9 @@ public record ChallengeListDto(List<ChallengeDto> Incoming, List<ChallengeDto> O
 ///   * Not yourself, never anyone blocked either way; up to 5 sent and 20 waiting at once; stakes up to 1,000.
 ///   * You can pick out one of their monsters from their public profile (if they let you see their Steplings) - it's
 ///     offered first when they answer, but they choose which monster fights.
+///   * A POWER BATTLE (PowerBattles) is an invitation the other walker accepts or declines: the winner's monster absorbs
+///     5% of the loser's power, and the loser's becomes a crystal until it's walked back. Within 25% BST only, never
+///     with a crystal, and 3 a day each.
 /// </summary>
 public static class ChallengeEndpoints
 {
@@ -117,6 +123,11 @@ public static class ChallengeEndpoints
 
         WalkingMonster? monster = await db.WalkingMonsters.AsNoTracking().FirstOrDefaultAsync(m => m.Id == request.MonsterId && m.OwnerId == me, cancel);
         if (monster == null) return Problem("Pick one of your own monsters.");
+        if (PowerBattles.IsCrystal(monster)) return Problem("That monster is a crystal after a power battle - walk to bring its power back first.");
+        if (request.PowerBattle && await PowerBattles.TodayAsync(db, me, DateTime.UtcNow, null, cancel) >= PowerBattles.MaxPerDay)
+        {
+            return Problem($"That's {PowerBattles.MaxPerDay} power battles today - more tomorrow!", StatusCodes.Status429TooManyRequests);
+        }
 
         // Picking out one of their monsters: it must be theirs, and they must let you see their Steplings.
         if (request.TargetMonsterId is Guid target)
@@ -149,7 +160,7 @@ public static class ChallengeEndpoints
         var challenge = new Challenge
         {
             FromUserId = me, ToUserId = to.Id, FromMonsterId = monster.Id, FromStrategy = (int)strategy, Stake = request.Stake,
-            RequestedMonsterId = request.TargetMonsterId,
+            RequestedMonsterId = request.TargetMonsterId, PowerBattle = request.PowerBattle,
             CreatedUtc = now, ExpiresUtc = now + Lifetime,
         };
         db.Challenges.Add(challenge);
@@ -186,16 +197,37 @@ public static class ChallengeEndpoints
             return Problem("Their monster isn't with them any more - the challenge was called off.", StatusCodes.Status409Conflict);
         }
 
+        DateTime now = DateTime.UtcNow;
+        MonsterCatalog catalog = finder.Catalog;
+        MonsterBattleStats fromStats = RankedEndpoints.StatsOf(catalog, theirs);
+        MonsterBattleStats toStats = RankedEndpoints.StatsOf(catalog, mine);
+
+        // Power battles: fair fights only, and never with a crystal.
+        if (PowerBattles.IsCrystal(mine)) return Problem("That monster is a crystal after a power battle - pick another, or walk to bring its power back.");
+        if (c.PowerBattle)
+        {
+            if (PowerBattles.IsCrystal(theirs))
+            {
+                await RefundAsync(db, c, ChallengeStatus.Cancelled, cancel);
+                await db.SaveChangesAsync(cancel);
+                return Problem("Their monster is a crystal now - the power battle was called off.", StatusCodes.Status409Conflict);
+            }
+            int larger = Math.Max(fromStats.Total, toStats.Total);
+            if (Math.Abs(fromStats.Total - toStats.Total) > larger * RankedWindow)
+            {
+                return Problem("For a power battle, pick a monster within 25% of theirs (BST " + fromStats.Total.ToString("N0") + ") - it has to be a fair fight.");
+            }
+            if (await PowerBattles.TodayAsync(db, me, now, c.Id, cancel) >= PowerBattles.MaxPerDay)
+            {
+                return Problem($"That's {PowerBattles.MaxPerDay} power battles today - this one can wait until tomorrow (if it hasn't expired).", StatusCodes.Status429TooManyRequests);
+            }
+        }
+
         WalkingProfile myProfile = await WalkingEndpoints.GetOrCreateProfile(db, me, cancel);
         if (c.Stake > 0 && !WalkingWallet.TrySpend(db, myProfile, c.Stake, "challenge", "Stake for a challenge"))
         {
             return Problem($"You need {c.Stake:N0} Glimmer to match their stake.");
         }
-
-        DateTime now = DateTime.UtcNow;
-        MonsterCatalog catalog = finder.Catalog;
-        MonsterBattleStats fromStats = RankedEndpoints.StatsOf(catalog, theirs);
-        MonsterBattleStats toStats = RankedEndpoints.StatsOf(catalog, mine);
         Snapshot(c, theirs, fromStats, mine, toStats);
 
         c.ToMonsterId = mine.Id;
@@ -214,6 +246,12 @@ public static class ChallengeEndpoints
         if (c.Stake > 0)
         {
             WalkingWallet.Change(db, c.FromWon ? fromProfile : myProfile, c.Stake * 2, "challenge", "Won a challenge");
+        }
+
+        // A power battle: the winner's monster absorbs power, the loser's becomes a crystal until it's walked back.
+        if (c.PowerBattle)
+        {
+            c.PowerMoved = c.FromWon ? PowerBattles.Settle(theirs, fromStats, mine, toStats) : PowerBattles.Settle(mine, toStats, theirs, fromStats);
         }
 
         // Close enough in BST? Then it counts as ranked: points and monster records move.
@@ -339,7 +377,7 @@ public static class ChallengeEndpoints
         ChallengeMonsterDto? to = null;
         ChallengeFightDto? fight = null;
         bool iWon = false;
-        int myPoints = 0, glimmer = 0;
+        int myPoints = 0, glimmer = 0, powerChange = 0;
 
         if (c.Status == ChallengeStatus.Fought)
         {
@@ -351,6 +389,7 @@ public static class ChallengeEndpoints
             iWon = incoming ? !c.FromWon : c.FromWon;
             myPoints = incoming ? c.ToPointsChange : c.FromPointsChange;
             glimmer = c.Stake == 0 ? 0 : iWon ? c.Stake : -c.Stake;
+            powerChange = !c.PowerBattle ? 0 : iWon ? c.PowerMoved : -c.PowerMoved;
         }
         else
         {
@@ -361,6 +400,6 @@ public static class ChallengeEndpoints
         }
 
         return new ChallengeDto(c.Id, incoming, other, otherName, otherCountry, c.Stake, c.Status.ToString(), c.CreatedUtc, c.ExpiresUtc,
-            from, to, c.Ranked, iWon, myPoints, glimmer, fight, c.RequestedMonsterId);
+            from, to, c.Ranked, iWon, myPoints, glimmer, fight, c.RequestedMonsterId, c.PowerBattle, powerChange);
     }
 }

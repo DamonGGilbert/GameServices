@@ -592,6 +592,12 @@ public class Challenge
     /// <summary>The monster of theirs the challenger picked out on their profile ("I want to fight your Sparky"), if any.</summary>
     public Guid? RequestedMonsterId { get; set; }
     public int Stake { get; set; }
+
+    /// <summary>A power battle (PowerBattles): the winner absorbs power from the loser, whose monster becomes a crystal.</summary>
+    public bool PowerBattle { get; set; }
+
+    /// <summary>How much power the winner absorbed (power battles, once fought).</summary>
+    public int PowerMoved { get; set; }
     public ChallengeStatus Status { get; set; } = ChallengeStatus.Pending;
     public DateTime CreatedUtc { get; set; } = DateTime.UtcNow;
     public DateTime ExpiresUtc { get; set; }
@@ -806,6 +812,20 @@ public class WalkingMonster
 
     /// <summary>The name its walker gave it with a Name Tag (word-filtered). Empty = its species name.</summary>
     public string Nickname { get; set; } = "";
+
+    // ---- Power battles (see Walking/Ranked/PowerBattles) ----
+
+    /// <summary>Power absorbed from monsters it beat in power battles, by stat - added to its stats for good.</summary>
+    public int AbsorbedPower { get; set; }
+    public int AbsorbedGuard { get; set; }
+    public int AbsorbedTricks { get; set; }
+    public int AbsorbedWits { get; set; }
+
+    /// <summary>After losing a power battle it's a crystal: this much power was drained, and comes back over CrystalSteps
+    /// accepted steps (CrystalStepsLeft still to go; 0 = not a crystal).</summary>
+    public int CrystalPower { get; set; }
+    public int CrystalSteps { get; set; }
+    public int CrystalStepsLeft { get; set; }
 }
 
 /// <summary>How many of each species have ever been found (for serial numbers).</summary>
@@ -860,6 +880,49 @@ public class MonsterSwap
     public DateTime CreatedUtc { get; set; } = DateTime.UtcNow;
     public DateTime ExpiresUtc { get; set; }
     public DateTime? DecidedUtc { get; set; }
+}
+
+/// <summary>Closed = the monster left another way first (an offer, a swap) or became its walker's companion.</summary>
+public enum ListingStatus { Active = 0, Sold = 1, Expired = 2, Cancelled = 3, Closed = 4 }
+
+/// <summary>A monster on the Market (see Walking/Monsters/MonsterMarket): bids until it ends, or Buy Now straight away.</summary>
+public class MarketListing
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid MonsterId { get; set; }
+    public Guid SellerId { get; set; }
+
+    /// <summary>Copied from the monster, so price history stays even after it's moved on.</summary>
+    public string SpeciesId { get; set; } = "";
+    public int RarityTier { get; set; }
+
+    public int StartPrice { get; set; }
+    public int BuyNowPrice { get; set; }
+
+    /// <summary>The top bid so far (0 = no bids); the top bidder's Glimmer is held until they're outbid or it ends.</summary>
+    public int CurrentBid { get; set; }
+    public Guid? TopBidderId { get; set; }
+    public int BidCount { get; set; }
+
+    public ListingStatus Status { get; set; } = ListingStatus.Active;
+    public DateTime CreatedUtc { get; set; } = DateTime.UtcNow;
+    public DateTime EndsUtc { get; set; }
+    public DateTime? ClosedUtc { get; set; }
+
+    /// <summary>Sold: who to, for how much, and whether it was Buy Now (rather than the top bid when time ran out).</summary>
+    public Guid? BuyerId { get; set; }
+    public int SoldPrice { get; set; }
+    public bool BoughtNow { get; set; }
+}
+
+/// <summary>One bid on a Market listing (the history behind the listing's bid list).</summary>
+public class MarketBid
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid ListingId { get; set; }
+    public Guid BidderId { get; set; }
+    public int Amount { get; set; }
+    public DateTime CreatedUtc { get; set; } = DateTime.UtcNow;
 }
 
 public enum RouteStatus { Active = 0, Completed = 1, Abandoned = 2, Expired = 3 }

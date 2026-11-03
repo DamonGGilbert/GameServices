@@ -129,8 +129,8 @@ public static class MonsterSwaps
         // Both monsters - level, training and all - go to their new walkers in one step.
         swap.Status = SwapStatus.Done;
         swap.DecidedUtc = now;
-        await MonsterHandover.Move(db, mine, swap.FromUserId, now, null, swap.Id, cancel);
-        await MonsterHandover.Move(db, theirs, me, now, null, swap.Id, cancel);
+        await MonsterHandover.Move(db, mine, swap.FromUserId, now, null, swap.Id, null, cancel);
+        await MonsterHandover.Move(db, theirs, me, now, null, swap.Id, null, cancel);
         await db.SaveChangesAsync(cancel);
         return Results.Ok(await ToDto(db, swap, me, cancel));
     }

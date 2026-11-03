@@ -8,7 +8,8 @@ namespace GameServices.Api.Walking;
 /// trigger it, it
 ///   * finishes step races whose time is up (works out the winner and updates everyone's race record), and
 ///   * expires race challenges nobody answered within a day, and
-///   * starts and finishes the weekend guild step races (WalkingGuilds.RunOnce).
+///   * starts and finishes the weekend guild step races (WalkingGuilds.RunOnce), and
+///   * finishes Market listings whose time is up (MonsterMarket.SettleDue).
 /// (The weekly Guild Journey needs no job: it's worked out from the step reports whenever someone looks.)
 /// </summary>
 public class WalkingLifecycleService(IServiceScopeFactory scopes, ILogger<WalkingLifecycleService> logger) : BackgroundService
@@ -33,7 +34,7 @@ public class WalkingLifecycleService(IServiceScopeFactory scopes, ILogger<Walkin
 
                     if (changed > 0)
                     {
-                        logger.LogInformation("Walking: {Count} race(s) started, finished or expired.", changed);
+                        logger.LogInformation("Walking: {Count} race(s) or Market listing(s) started, finished or expired.", changed);
                     }
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
@@ -85,7 +86,8 @@ public class WalkingLifecycleService(IServiceScopeFactory scopes, ILogger<Walkin
         }
 
         int guildRaces = await WalkingGuilds.RunOnce(db, now, cancel);
+        int listings = await Monsters.MonsterMarket.SettleDue(db, now, cancel);
 
-        return expired + over.Count + guildRaces;
+        return expired + over.Count + guildRaces + listings;
     }
 }
