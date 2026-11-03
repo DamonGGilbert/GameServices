@@ -466,8 +466,14 @@ public class WalkingProfile
     public string PhoneGlimmerDay { get; set; } = "";
     public int PhoneGlimmerToday { get; set; }
 
-    public string PacksDay { get; set; } = "";
+    public string PacksDay { get; set; } = "";     // (packs were removed - kept so old saves still load)
     public int PacksToday { get; set; }
+
+    /// <summary>How many monsters this walker can keep (6 to start, more as they level up - see Monsters/MonsterSlots).</summary>
+    public int MonsterSlots { get; set; } = 6;
+
+    /// <summary>The title they wear (earned with medals in the game, word-filtered): shown in the Players list.</summary>
+    public string Title { get; set; } = "";
 
     /// <summary>The monster this walker walks with (it can't be offered for).</summary>
     public Guid? CompanionMonsterId { get; set; }
@@ -499,6 +505,22 @@ public class WalkingProfile
 
     /// <summary>Who can see this walker's Steplings on their public profile (Walking/PublicProfiles): 0 everyone, 1 friends, 2 nobody.</summary>
     public int MonsterVisibility { get; set; }
+
+    // ---- The Bazaar (Walking/Bazaar) ----
+
+    /// <summary>Card styles bought at the Monster Maker, as "sunset,ocean" (see CardStyles).</summary>
+    public string CardStyles { get; set; } = "";
+
+    /// <summary>The UTC day ("yyyy-MM-dd") the counters below belong to - a new day starts them again.</summary>
+    public string BazaarDay { get; set; } = "";
+    public int TraderSellsToday { get; set; }
+    public int TraderBuysToday { get; set; }
+    public int TonicsToday { get; set; }
+    public int MendersToday { get; set; }
+
+    /// <summary>Wild battles won today that took a bite of power (Walking/Monsters/WildBattles), and the day they count for.</summary>
+    public string WildDay { get; set; } = "";
+    public int WildBitesToday { get; set; }
 }
 
 /// <summary>One of a walker's (up to 3) monsters entered into ranked, and how it fights when attacked.</summary>
@@ -826,6 +848,10 @@ public class WalkingMonster
     public int CrystalPower { get; set; }
     public int CrystalSteps { get; set; }
     public int CrystalStepsLeft { get; set; }
+
+    /// <summary>The card style it wears (bought at the Monster Maker - Walking/Bazaar/CardStyles). Empty = plain. It
+    /// travels with the monster to a new home.</summary>
+    public string CardStyle { get; set; } = "";
 }
 
 /// <summary>How many of each species have ever been found (for serial numbers).</summary>

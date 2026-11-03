@@ -110,44 +110,6 @@ public class WalkingTradeTests : IClassFixture<ApiFactory>
         Assert.Equal(42, await Balance(p));
     }
 
-    // ------------------------------------------------------------------ packs
-
-    [Fact]
-    public async Task Packs_list_their_exact_odds()
-    {
-        List<PackDto> packs = (await (await NewPlayer()).Http.GetFromJsonAsync<List<PackDto>>("/api/walking/packs"))!;
-        Assert.Contains(packs, p => p.Id == "trail" && p.Odds.Any(o => o.Contains("chance of a sealed monster card")));
-    }
-
-    [Fact]
-    public async Task Opening_a_pack_costs_Glimmer_and_gives_tonics_and_Glimmer_back()
-    {
-        Player p = await NewPlayer();
-        await GiveGlimmer(p, 1000);
-
-        PackResult result = (await (await p.Http.PostAsJsonAsync("/api/walking/packs/trail/open", new PackOpenRequest())).Content.ReadFromJsonAsync<PackResult>())!;
-
-        Assert.InRange(result.Tonics, 1, 2);
-        Assert.InRange(result.GlimmerBack, 25, 100);
-        Assert.Equal(1000 - 250 + result.GlimmerBack, result.Glimmer);
-        Assert.Equal(result.Glimmer, await Balance(p));
-    }
-
-    [Fact]
-    public async Task No_Glimmer_no_pack_and_never_more_than_three_a_day()
-    {
-        Player poor = await NewPlayer();
-        Assert.Equal(HttpStatusCode.BadRequest, (await poor.Http.PostAsJsonAsync("/api/walking/packs/trail/open", new PackOpenRequest())).StatusCode);
-
-        Player rich = await NewPlayer();
-        await GiveGlimmer(rich, 10000);
-        for (int i = 0; i < 3; i++)
-        {
-            Assert.Equal(HttpStatusCode.OK, (await rich.Http.PostAsJsonAsync("/api/walking/packs/trail/open", new PackOpenRequest())).StatusCode);
-        }
-        Assert.Equal(HttpStatusCode.TooManyRequests, (await rich.Http.PostAsJsonAsync("/api/walking/packs/trail/open", new PackOpenRequest())).StatusCode);
-    }
-
     // ------------------------------------------------------------------ offers
 
     [Fact]

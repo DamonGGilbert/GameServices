@@ -30,7 +30,7 @@ public record RankedFightRequest(string Strategy);
 public record RankedFightResultDto(Guid MatchId, bool Won, string Strategy, string OpponentStrategy,
     int[] Mine, int[] Theirs, int Score, int OpponentScore, float Chance, float Roll, int Reward, int RewardedWinsToday, string Message,
     long Seed, int[] MineBefore, int[] TheirsBefore, int Wins, int Losses,
-    int PointsChange, int Points, string Tier, bool HighValue);
+    int PointsChange, int Points, string Tier, bool HighValue, int PowerChange = 0, int CrystalSteps = 0);
 
 public record RankedHistoryDto(Guid MatchId, bool Attacking, string OtherName, bool Shadow, string MySpeciesId, string OtherSpeciesId, bool Won, DateTime FoughtUtc);
 
@@ -46,7 +46,8 @@ public record RankedHistoryDto(Guid MatchId, bool Attacking, string OtherName, b
 /// Matchmaking compares BST (base stat total, worked out here - never taken from a phone): first within 10% of yours,
 /// then 15%, 20%, 25%. Nobody in range? A SHADOW monster the server makes at your BST. The opponent's stats are fixed
 /// when the match is made, so what you see is what you fight. Ranked has no walking bonus, tonic or arena boost.
-/// Fights are unlimited; Glimmer for a win stops after RewardedWinsPerDay a day. Nobody ever loses a monster.
+/// Fights are unlimited; Glimmer for a win stops after RewardedWinsPerDay a day. Nobody ever loses a monster - but an
+/// attacker that loses turns to crystal for a walk, and one that wins takes a bite of power (PowerBattles).
 /// Every fight moves RANKED POINTS (RankedPoints: big, rare and upset wins are worth most), which decide tiers, the
 /// monthly season and the leaderboards (RankedLeaderboards). Within the BST window, matchmaking prefers walkers with
 /// similar points.
@@ -313,7 +314,7 @@ public static class RankedEndpoints
 
     // ------------------------------------------------------------------ the fight
 
-    private static async Task<IResult> Fight(Guid matchId, RankedFightRequest request, ClaimsPrincipal principal, AppDbContext db, CancellationToken cancel)
+    private static async Task<IResult> Fight(Guid matchId, RankedFightRequest request, ClaimsPrincipal principal, AppDbContext db, MonsterFinder finder, CancellationToken cancel)
     {
         if (!SocialEndpoints.TryGetUserId(principal, out Guid me)) return Results.Unauthorized();
         if (!Enum.TryParse(request?.Strategy, true, out DuelStrategy strategy) || !Enum.IsDefined(strategy)) return Problem("Pick a strategy.");
@@ -373,6 +374,7 @@ public static class RankedEndpoints
         WalkingProfile? theirProfile = match.DefenderId is Guid du ? await WalkingEndpoints.GetOrCreateProfile(db, du, cancel) : null;
 
         string message;
+        int powerChange = 0, crystalSteps = 0;
         if (outcome.PlayerWon)
         {
             profile.RankedWins++;
@@ -386,6 +388,14 @@ public static class RankedEndpoints
                 profile.RankedRewardedWinsToday++;
                 WalkingWallet.Change(db, profile, match.Reward, "ranked", "Ranked win");
                 message = $"Victory! +{match.Reward} Glimmer.";
+
+                // A bite: the first few rewarded wins a day take some of the defender's power, for good (theirs isn't lost).
+                if (myMonster != null && profile.RankedRewardedWinsToday <= PowerBattles.RankedBitesPerDay)
+                {
+                    powerChange = PowerBattles.Share(defender.Total, PowerBattles.RankedBiteShare);
+                    PowerBattles.Absorb(myMonster, StatsOf(finder.Catalog, myMonster), powerChange);
+                    message += $" A bite: +{powerChange} power, for good!";
+                }
             }
             else
             {
@@ -398,7 +408,16 @@ public static class RankedEndpoints
             if (myEntry != null) myEntry.Losses++;
             if (theirEntry != null) theirEntry.Wins++;
             if (theirProfile != null) theirProfile.RankedWins++;
-            message = "Defeated this time - your monster is fine. Try another fight!";
+            message = "Defeated this time. Try another fight!";
+
+            // Losing an attack turns your monster to crystal for a walk (the defender never risks anything).
+            if (myMonster != null)
+            {
+                powerChange = -PowerBattles.Share(attacker.Total, PowerBattles.DefeatShare);
+                PowerBattles.Crystallise(myMonster, -powerChange, PowerBattles.DefeatSteps);
+                crystalSteps = PowerBattles.DefeatSteps;
+                message = $"Defeated - your monster turned to crystal. Walk {PowerBattles.DefeatSteps:N0} steps to bring its power back.";
+            }
         }
 
         if (change.HighValue) message += " A high-value win!";
@@ -409,7 +428,7 @@ public static class RankedEndpoints
             Stats(outcome.Player.After), Stats(outcome.Opponent.After), outcome.Player.Score, outcome.Opponent.Score,
             outcome.Player.Chance, outcome.Roll, match.Reward, profile.RankedRewardedWinsToday, message,
             match.Seed, Stats(attacker), Stats(defender), profile.RankedWins, profile.RankedLosses,
-            change.Attacker, mySeason.Points, tierNow.ToString(), change.HighValue));
+            change.Attacker, mySeason.Points, tierNow.ToString(), change.HighValue, powerChange, crystalSteps));
     }
 
     private static int[] Stats(DuelStats s) => new[] { s.Power, s.Guard, s.Trickery, s.Wits };

@@ -358,6 +358,13 @@ public class AppDbContext : DbContext
             s.HasOne<WalkingMonster>().WithMany().HasForeignKey(x => x.ToMonsterId).OnDelete(DeleteBehavior.Cascade);
         });
 
+        model.Entity<WalkingProfile>().Property(x => x.MonsterSlots).HasDefaultValue(6);
+        model.Entity<WalkingProfile>().Property(x => x.Title).HasMaxLength(40);
+        model.Entity<WalkingProfile>().Property(x => x.CardStyles).HasMaxLength(400);
+        model.Entity<WalkingProfile>().Property(x => x.BazaarDay).HasMaxLength(10);
+        model.Entity<WalkingProfile>().Property(x => x.WildDay).HasMaxLength(10);
+        model.Entity<WalkingMonster>().Property(x => x.CardStyle).HasMaxLength(24);
+
         model.Entity<MarketListing>(l =>
         {
             l.HasKey(x => x.Id);

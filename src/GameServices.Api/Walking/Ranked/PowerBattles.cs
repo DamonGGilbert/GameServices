@@ -5,6 +5,8 @@ using Microsoft.EntityFrameworkCore;
 namespace GameServices.Api.Walking.Ranked;
 
 /// <summary>
+/// POWER: monsters take it from each other, and lose it (as a crystal) when they're beaten.
+///
 /// POWER BATTLES: a challenge both walkers agree to, where the winner's monster ABSORBS power from the loser's.
 ///
 ///   * It's an invitation (ChallengeEndpoints with PowerBattle = true): the walker challenged sees it's a power battle
@@ -15,12 +17,30 @@ namespace GameServices.Api.Walking.Ranked;
 ///     lost for ever - it's walked back.
 ///   * Fair fights only: the two monsters must be within 25% of each other's BST, neither can already be a crystal,
 ///     and each walker has at most 3 power battles a day.
+///
+/// RANKED AND WILD BATTLES (smaller stakes, and only for the one who chose to fight):
+///   * Ranked: an attacker that wins takes a BITE - 3% of the defender's power - on its first 3 rewarded wins a day
+///     (the defender loses nothing). An attacker that loses turns to crystal, 3% drained, walked back over 3,000 steps.
+///   * Wild: a win takes 1% of the wild monster's power (3 a day); a loss is a crystal the same as ranked.
+///   * Casual battles with friends and battles with trainers never move power.
 /// </summary>
 public static class PowerBattles
 {
     public const double AbsorbShare = 0.05;
     public const int CrystalSteps = 6000;
     public const int MaxPerDay = 3;
+
+    /// <summary>A ranked bite: this share of the defender's power, on the first RankedBitesPerDay rewarded wins a day.</summary>
+    public const double RankedBiteShare = 0.03;
+    public const int RankedBitesPerDay = 3;
+
+    /// <summary>A wild bite: this share of the wild monster's power, WildBitesPerDay a day.</summary>
+    public const double WildBiteShare = 0.01;
+    public const int WildBitesPerDay = 3;
+
+    /// <summary>Losing a ranked or wild battle: this share of the monster's power is drained, walked back over DefeatSteps.</summary>
+    public const double DefeatShare = 0.03;
+    public const int DefeatSteps = 3000;
 
     /// <summary>A monster's power: its four battle stats together (as its card shows it).</summary>
     public static int PowerOf(MonsterBattleStats s) => s.Power + s.Guard + s.Tricks + s.Wits;
@@ -33,17 +53,31 @@ public static class PowerBattles
     /// </summary>
     public static int Settle(WalkingMonster winner, MonsterBattleStats winnerStats, WalkingMonster loser, MonsterBattleStats loserStats)
     {
-        int amount = Math.Max(1, (int)Math.Round(PowerOf(loserStats) * AbsorbShare));
+        int amount = Share(PowerOf(loserStats), AbsorbShare);
+        Absorb(winner, winnerStats, amount);
+        Crystallise(loser, amount, CrystalSteps);
+        return amount;
+    }
+
+    /// <summary>A share of some power, at least 1.</summary>
+    public static int Share(int power, double share) => Math.Max(1, (int)Math.Round(Math.Max(0, power) * share));
+
+    /// <summary>Adds power for good, shared across the four stats the way the monster's own are.</summary>
+    public static void Absorb(WalkingMonster winner, MonsterBattleStats winnerStats, int amount)
+    {
         int[] share = Split(amount, new[] { winnerStats.Power, winnerStats.Guard, winnerStats.Tricks, winnerStats.Wits });
         winner.AbsorbedPower += share[0];
         winner.AbsorbedGuard += share[1];
         winner.AbsorbedTricks += share[2];
         winner.AbsorbedWits += share[3];
+    }
 
+    /// <summary>Turns a beaten monster to crystal: this much power drained, back bit by bit over this many steps.</summary>
+    public static void Crystallise(WalkingMonster loser, int amount, int steps)
+    {
         loser.CrystalPower = amount;
-        loser.CrystalSteps = CrystalSteps;
-        loser.CrystalStepsLeft = CrystalSteps;
-        return amount;
+        loser.CrystalSteps = steps;
+        loser.CrystalStepsLeft = steps;
     }
 
     /// <summary>Shares an amount out in proportion to the weights, whole numbers that add up exactly (largest remainder).</summary>

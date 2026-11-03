@@ -1729,6 +1729,11 @@ namespace GameServices.Api.MigrationsPostgres
                         .HasMaxLength(32)
                         .HasColumnType("character varying(32)");
 
+                    b.Property<string>("CardStyle")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("character varying(24)");
+
                     b.Property<int>("CrystalPower")
                         .HasColumnType("integer");
 
@@ -1827,6 +1832,16 @@ namespace GameServices.Api.MigrationsPostgres
                     b.Property<Guid>("UserId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("BazaarDay")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)");
+
+                    b.Property<string>("CardStyles")
+                        .IsRequired()
+                        .HasMaxLength(400)
+                        .HasColumnType("character varying(400)");
+
                     b.Property<Guid?>("CompanionMonsterId")
                         .HasColumnType("uuid");
 
@@ -1851,6 +1866,14 @@ namespace GameServices.Api.MigrationsPostgres
 
                     b.Property<long>("LifetimeSteps")
                         .HasColumnType("bigint");
+
+                    b.Property<int>("MendersToday")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("MonsterSlots")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(6);
 
                     b.Property<int>("MonsterVisibility")
                         .HasColumnType("integer");
@@ -1894,6 +1917,11 @@ namespace GameServices.Api.MigrationsPostgres
                     b.Property<bool>("ShareSteps")
                         .HasColumnType("boolean");
 
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
                     b.Property<int>("TogetherBonusToday")
                         .HasColumnType("integer");
 
@@ -1916,8 +1944,25 @@ namespace GameServices.Api.MigrationsPostgres
                     b.Property<int>("TogetherStepRemainder")
                         .HasColumnType("integer");
 
+                    b.Property<int>("TonicsToday")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("TraderBuysToday")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("TraderSellsToday")
+                        .HasColumnType("integer");
+
                     b.Property<bool>("WalletStarted")
                         .HasColumnType("boolean");
+
+                    b.Property<int>("WildBitesToday")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("WildDay")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)");
 
                     b.HasKey("UserId");
 

@@ -104,6 +104,7 @@ public static class MonsterOffers
         }
 
         if (await TradesThisWeek(db, me, now, cancel) >= MaxTradesPerWeek) return Problem($"That's {MaxTradesPerWeek} trades this week - offers open again soon.");
+        if (!await MonsterSlots.HasRoomAsync(db, me, cancel)) return Problem(MonsterSlots.FullMessage);
 
         WalkingProfile buyer = await WalkingEndpoints.GetOrCreateProfile(db, me, cancel);
         if (!WalkingWallet.TrySpend(db, buyer, request.Price, "offer-held", "Held for an offer"))
@@ -149,6 +150,7 @@ public static class MonsterOffers
         if (seller.CompanionMonsterId == monster.Id) return Problem("That's your companion. Choose a different companion first if you really want to say goodbye.");
         if (await TradesThisWeek(db, me, now, cancel) >= MaxTradesPerWeek) return Problem($"That's {MaxTradesPerWeek} trades this week for you.");
         if (await TradesThisWeek(db, offer.FromUserId, now, cancel) >= MaxTradesPerWeek) return Problem("Your friend has made all their trades for this week.");
+        if (!await MonsterSlots.HasRoomAsync(db, offer.FromUserId, cancel)) return Problem("Your friend's team is full right now - they need to make room first.");
 
         offer.Status = OfferStatus.Accepted;
         offer.DecidedUtc = now;

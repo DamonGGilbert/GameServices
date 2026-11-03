@@ -9,12 +9,13 @@ public record WalkingMonsterDto(Guid Id, string SpeciesId, long Seed, int Rarity
     string Source, string? BiomeId, DateTime FoundUtc, bool Seen,
     int Level, int Experience, int TrainedPower, int TrainedGuard, int TrainedTricks, int TrainedWits, int TrainingSteps,
     string? ArrivedFrom, string Nickname = "",
-    int AbsorbedPower = 0, int AbsorbedGuard = 0, int AbsorbedTricks = 0, int AbsorbedWits = 0, int CrystalPower = 0, int CrystalSteps = 0, int CrystalStepsLeft = 0);
+    int AbsorbedPower = 0, int AbsorbedGuard = 0, int AbsorbedTricks = 0, int AbsorbedWits = 0, int CrystalPower = 0, int CrystalSteps = 0, int CrystalStepsLeft = 0,
+    string CardStyle = "");
 
 public record MonsterProgressDto(Guid Id, int Level, int Experience, int TrainedPower, int TrainedGuard, int TrainedTricks, int TrainedWits, int TrainingSteps);
 
-/// <summary>The game's view of its monsters' progress, and which one is the companion.</summary>
-public record ProgressRequest(Guid? CompanionId, List<MonsterProgressDto> Monsters);
+/// <summary>The game's view of its monsters' progress, which one is the companion, and how many monster slots it has earned.</summary>
+public record ProgressRequest(Guid? CompanionId, List<MonsterProgressDto> Monsters, int? Slots = null, string? Title = null);
 
 /// <summary>
 /// THE WALKING GAME'S MONSTERS, made on the server.
@@ -36,6 +37,7 @@ public static class MonsterEndpoints
         group.MapMonsterNameEndpoints();
         group.MapPost("/monsters/{monsterId:guid}/seen", MarkSeen);
         group.MapPut("/monsters/progress", SaveProgress);
+        group.MapPost("/monsters/{monsterId:guid}/wild", WildBattles.Report);
         return group;
     }
 
@@ -71,7 +73,7 @@ public static class MonsterEndpoints
     public static WalkingMonsterDto ToDto(WalkingMonster m, string? arrivedFrom) =>
         new(m.Id, m.SpeciesId, m.Seed, m.RarityTier, m.Potential, m.RulesVersion, m.Serial, m.Source, m.BiomeId, m.FoundUtc, m.Seen,
             m.Level, m.Experience, m.TrainedPower, m.TrainedGuard, m.TrainedTricks, m.TrainedWits, m.TrainingSteps, arrivedFrom, m.Nickname ?? "",
-            m.AbsorbedPower, m.AbsorbedGuard, m.AbsorbedTricks, m.AbsorbedWits, m.CrystalPower, m.CrystalSteps, m.CrystalStepsLeft);
+            m.AbsorbedPower, m.AbsorbedGuard, m.AbsorbedTricks, m.AbsorbedWits, m.CrystalPower, m.CrystalSteps, m.CrystalStepsLeft, m.CardStyle ?? "");
 
     // The game sends its monsters' levels and training. The server can't watch every step of a battle or a walk, so it
     // keeps what's believable: no level above 100, never more training than the monster's potential allows.
@@ -109,6 +111,8 @@ public static class MonsterEndpoints
         }
 
         WalkingProfile profile = await WalkingEndpoints.GetOrCreateProfile(db, me, cancel);
+        if (request?.Slots is int slots) profile.MonsterSlots = Math.Clamp(slots, MonsterSlots.Starting, MonsterSlots.Most);
+        if (request?.Title != null) profile.Title = Explorers.CleanTitle(request.Title);
         if (request?.CompanionId is Guid companion && mine.ContainsKey(companion))
         {
             profile.CompanionMonsterId = companion;
@@ -145,6 +149,7 @@ public static class MonsterEndpoints
         int chances = finder.AddSteps(ref carried, addedSteps);
         profile.EncounterSteps = carried;
         if (chances == 0) return 0;
+        if (!await MonsterSlots.HasRoomAsync(db, me, cancel)) return 0;   // a full team finds nothing new
 
         int foundToday = await db.WalkingMonsters.CountAsync(m => m.OwnerId == me && m.FoundDay == day && m.Source == "walk", cancel);
         int found = 0;

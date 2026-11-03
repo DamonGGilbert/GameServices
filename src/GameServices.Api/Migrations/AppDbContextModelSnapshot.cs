@@ -1718,6 +1718,11 @@ namespace GameServices.Api.Migrations
                         .HasMaxLength(32)
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("CardStyle")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("TEXT");
+
                     b.Property<int>("CrystalPower")
                         .HasColumnType("INTEGER");
 
@@ -1816,6 +1821,16 @@ namespace GameServices.Api.Migrations
                     b.Property<Guid>("UserId")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("BazaarDay")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CardStyles")
+                        .IsRequired()
+                        .HasMaxLength(400)
+                        .HasColumnType("TEXT");
+
                     b.Property<Guid?>("CompanionMonsterId")
                         .HasColumnType("TEXT");
 
@@ -1840,6 +1855,14 @@ namespace GameServices.Api.Migrations
 
                     b.Property<long>("LifetimeSteps")
                         .HasColumnType("INTEGER");
+
+                    b.Property<int>("MendersToday")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("MonsterSlots")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(6);
 
                     b.Property<int>("MonsterVisibility")
                         .HasColumnType("INTEGER");
@@ -1883,6 +1906,11 @@ namespace GameServices.Api.Migrations
                     b.Property<bool>("ShareSteps")
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("TEXT");
+
                     b.Property<int>("TogetherBonusToday")
                         .HasColumnType("INTEGER");
 
@@ -1905,8 +1933,25 @@ namespace GameServices.Api.Migrations
                     b.Property<int>("TogetherStepRemainder")
                         .HasColumnType("INTEGER");
 
+                    b.Property<int>("TonicsToday")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("TraderBuysToday")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("TraderSellsToday")
+                        .HasColumnType("INTEGER");
+
                     b.Property<bool>("WalletStarted")
                         .HasColumnType("INTEGER");
+
+                    b.Property<int>("WildBitesToday")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("WildDay")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("TEXT");
 
                     b.HasKey("UserId");
 

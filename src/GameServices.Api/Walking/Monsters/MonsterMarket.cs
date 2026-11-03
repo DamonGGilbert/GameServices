@@ -50,6 +50,8 @@ public record MarketActivityDto(List<MarketListingDto> Selling, List<MarketListi
 ///   * a monster must have been with its walker for 3 days first
 ///   * prices stay within the limits for its rarity (no "1 Glimmer" tricks)
 ///   * at most 5 listings each, and top bid on at most 10 at once
+///   * bidding and buying need a free monster slot (MonsterSlots); a top bidder with no room when time runs out gets
+///     their Glimmer back and the monster stays with its walker
 ///   * no bidding on your own, and nothing between walkers who've blocked each other
 /// The top bidder's Glimmer is held: outbid, and it comes straight back. A bid in the last minute adds a minute, so
 /// nobody can snatch it at the final second. When time runs out the top bid wins; with no bids it stays with its walker.
@@ -234,6 +236,7 @@ public static class MonsterMarket
         if (problem != null) return problem == "" ? Results.NotFound() : Problem(problem);
 
         if (listing!.TopBidderId == me) return Problem("You're already the top bidder.");
+        if (!await MonsterSlots.HasRoomAsync(db, me, cancel)) return Problem(MonsterSlots.FullMessage);
         int least = MinNextBid(listing);
         if (least >= listing.BuyNowPrice) return Problem("Bidding has reached the Buy Now price - Buy Now to take it home.");
         if (request.Amount < least) return Problem($"The next bid has to be at least {least:N0} Glimmer.");
@@ -279,6 +282,7 @@ public static class MonsterMarket
             return Problem("That monster isn't for sale any more.");
         }
 
+        if (!await MonsterSlots.HasRoomAsync(db, me, cancel)) return Problem(MonsterSlots.FullMessage);
         WalkingProfile buyer = await Profile(db, me, cancel);
         if (!WalkingWallet.TrySpend(db, buyer, listing.BuyNowPrice, "market-buy", "Bought on the Market"))
         {
@@ -327,9 +331,9 @@ public static class MonsterMarket
 
             WalkingMonster? monster = await db.WalkingMonsters.FirstOrDefaultAsync(m => m.Id == listing.MonsterId, cancel);
             WalkingProfile seller = await Profile(db, listing.SellerId, cancel);
-            if (monster == null || monster.OwnerId != listing.SellerId || seller.CompanionMonsterId == monster.Id)
+            if (monster == null || monster.OwnerId != listing.SellerId || seller.CompanionMonsterId == monster.Id || !await MonsterSlots.HasRoomAsync(db, winner, cancel))
             {
-                await Close(db, listing, ListingStatus.Closed, now, cancel);
+                await Close(db, listing, ListingStatus.Closed, now, cancel);   // (or the top bidder has no room left: their bid goes back)
                 continue;
             }
 

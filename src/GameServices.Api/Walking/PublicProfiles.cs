@@ -11,7 +11,8 @@ namespace GameServices.Api.Walking;
 public enum MonsterVisibility { Everyone = 0, Friends = 1, Nobody = 2 }
 
 public record PublicMonsterDto(Guid Id, string SpeciesId, long Seed, int RarityTier, int Level,
-    int TrainedPower, int TrainedGuard, int TrainedTricks, int TrainedWits, int Bst, int RankedWins, int RankedLosses, string Nickname);
+    int TrainedPower, int TrainedGuard, int TrainedTricks, int TrainedWits, int Bst, int RankedWins, int RankedLosses, string Nickname,
+    int AbsorbedPower = 0, int AbsorbedGuard = 0, int AbsorbedTricks = 0, int AbsorbedWits = 0, int CrystalStepsLeft = 0, string CardStyle = "");
 
 public record PublicProfileDto(Guid UserId, string Username, string Country, bool IsMe, bool IsFriend,
     string Tier, int Points, int Wins, int Losses, int HighValueWins, int WorldPlace,
@@ -48,6 +49,11 @@ public static class PublicProfiles
         group.MapPut("/monster-privacy", SetPrivacy);
         return group;
     }
+
+    /// <summary>A monster as anyone may see it (its recipe, progress, BST and record).</summary>
+    public static PublicMonsterDto ToPublic(WalkingMonster m, int bst) =>
+        new(m.Id, m.SpeciesId, m.Seed, m.RarityTier, m.Level, m.TrainedPower, m.TrainedGuard, m.TrainedTricks, m.TrainedWits, bst,
+            m.RankedWins, m.RankedLosses, m.Nickname ?? "", m.AbsorbedPower, m.AbsorbedGuard, m.AbsorbedTricks, m.AbsorbedWits, m.CrystalStepsLeft, m.CardStyle ?? "");
 
     /// <summary>Whether viewer may see owner's Steplings.</summary>
     public static async Task<bool> CanSeeMonsters(AppDbContext db, Guid viewer, Guid owner, CancellationToken cancel)
@@ -111,9 +117,7 @@ public static class PublicProfiles
                 .Select(m => (Monster: m, Bst: RankedEndpoints.StatsOf(finder.Catalog, m).Total))
                 .OrderByDescending(x => x.Bst).ThenByDescending(x => x.Monster.RankedWins)
                 .Take(MonstersShown)
-                .Select(x => new PublicMonsterDto(x.Monster.Id, x.Monster.SpeciesId, x.Monster.Seed, x.Monster.RarityTier, x.Monster.Level,
-                    x.Monster.TrainedPower, x.Monster.TrainedGuard, x.Monster.TrainedTricks, x.Monster.TrainedWits, x.Bst,
-                    x.Monster.RankedWins, x.Monster.RankedLosses, x.Monster.Nickname ?? ""))
+                .Select(x => ToPublic(x.Monster, x.Bst))
                 .ToList();
         }
 

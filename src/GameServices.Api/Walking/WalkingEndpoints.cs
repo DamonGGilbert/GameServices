@@ -2,6 +2,7 @@ using System.Security.Claims;
 using GameServices.Api.Chat;
 using GameServices.Api.Data;
 using GameServices.Api.Social;
+using GameServices.Api.Walking.Bazaar;
 using GameServices.Api.Walking.Monsters;
 using GameServices.Api.Walking.Routes;
 using GameServices.Api.Walking.Wallet;
@@ -88,10 +89,10 @@ public static class WalkingEndpoints
         // Walking guilds: the weekly Guild Journey, the weekend step race and the ranking (WalkingGuilds.cs).
         group.MapWalkingGuildEndpoints();
 
-        // Monsters, made on the server and found (very rarely) by walking (Walking/Monsters), packs, offers and the
-        // Daily Swap between friends, the Market between any walkers, and the Glimmer that pays for them (Walking/Wallet).
+        // Monsters, made on the server and found (very rarely) by walking (Walking/Monsters) - a small group each, with
+        // more slots as you level up (MonsterSlots) - offers and the Daily Swap between friends, the Market between any
+        // walkers, and the Glimmer that pays for them (Walking/Wallet).
         group.MapWalkingMonsterEndpoints();
-        group.MapWalkingPackEndpoints();
         group.MapMonsterOfferEndpoints();
         group.MapMonsterSwapEndpoints();
         group.MapMonsterMarketEndpoints();
@@ -101,6 +102,8 @@ public static class WalkingEndpoints
         // Safe walking loops with bonus rewards (Walking/Routes).
         group.MapRouteEndpoints();
         group.MapPublicProfileEndpoints();
+        group.MapExplorerEndpoints();   // Players: walkers to meet without walking (Explorers.cs)
+        group.MapBazaarEndpoints();     // the Bazaar: Juniper the Trader, the Monster Maker and the Tonic Stand (Bazaar/)
 
         group.MapGet("/races", MyRaces);
         group.MapPost("/races", Challenge);

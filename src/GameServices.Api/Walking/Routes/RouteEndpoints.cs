@@ -49,6 +49,9 @@ public static class RouteEndpoints
 
     private sealed record Kind(string Id, string Name, int Metres, int Glimmer, double MonsterChance, int MonsterMinTier, bool Weekly);
 
+    /// <summary>Glimmer given instead of a route's monster when the walker's team is full (MonsterSlots).</summary>
+    public const int FullTeamGlimmer = 150;
+
     private static readonly Kind[] Kinds =
     {
         new("short", "Short loop", 1000, 40, 0, 0, false),
@@ -216,7 +219,7 @@ public static class RouteEndpoints
         route.NextCheckpoint++;
         route.LastCheckpointUtc = now;
         int glimmer = 0;
-        bool monster = false;
+        bool monster = false, fullTeam = false;
 
         if (last)
         {
@@ -228,9 +231,19 @@ public static class RouteEndpoints
 
             if (kind.MonsterChance > 0 && (kind.MonsterChance >= 1 || Random.Shared.NextDouble() < kind.MonsterChance))
             {
-                (string species, int tier, long seed, int potential) = finder.Roll(route.Biome, kind.MonsterMinTier);
-                await MonsterEndpoints.Add(db, me, species, tier, seed, potential, finder.Catalog.RulesVersion, "route", route.Biome, now.ToString("yyyy-MM-dd"), cancel);
-                monster = true;
+                if (await MonsterSlots.HasRoomAsync(db, me, cancel))
+                {
+                    (string species, int tier, long seed, int potential) = finder.Roll(route.Biome, kind.MonsterMinTier);
+                    await MonsterEndpoints.Add(db, me, species, tier, seed, potential, finder.Catalog.RulesVersion, "route", route.Biome, now.ToString("yyyy-MM-dd"), cancel);
+                    monster = true;
+                }
+                else
+                {
+                    // No room for the monster waiting at the finish: its worth in Glimmer instead.
+                    WalkingWallet.Change(db, profile, FullTeamGlimmer, "route", kind.Name + " - team full, Glimmer instead of a monster");
+                    glimmer += FullTeamGlimmer;
+                    fullTeam = true;
+                }
             }
 
             route.RewardGlimmer = glimmer;
@@ -240,7 +253,7 @@ public static class RouteEndpoints
         await db.SaveChangesAsync(cancel);
 
         string message = last
-            ? "Route complete! +" + glimmer + " Glimmer" + (monster ? " - and a monster was waiting at the finish!" : ".")
+            ? "Route complete! +" + glimmer + " Glimmer" + (monster ? " - and a monster was waiting at the finish!" : fullTeam ? " (a monster was waiting, but your team is full - so extra Glimmer instead)." : ".")
             : "Checkpoint " + (request.Index + 1) + " of " + checkpoints.Count + "!";
         return Results.Ok(new CheckpointResult(route.NextCheckpoint, checkpoints.Count, last, message, glimmer, monster, profile.Glimmer));
     }
