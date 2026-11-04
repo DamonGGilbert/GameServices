@@ -19,15 +19,15 @@ public class MonsterStatsTests
         Assert.All(Catalog.Species, s => Assert.True(s.BaseStats.Power > 0 && s.BaseStats.Guard > 0 && s.BaseStats.Health > 0 && s.BaseStats.Tricks > 0));
     }
 
-    // Worked out by the game itself (a monster generated from the seed, then its card), October 2026.
+    // The same numbers are in the game's tests (ClanTests), which build each monster and its card the game's own way.
     [Theory]
-    [InlineData("MON_0001", 42L, 0, 1, 0, 0, 0, 0, 51, 30, 40, 49, 49)]
-    [InlineData("MON_0001", 42L, 4, 1, 0, 0, 0, 0, 142, 84, 112, 136, 138)]
-    [InlineData("MON_0002", 123456789L, 2, 37, 5, 3, 8, 2, 266, 303, 239, 234, 458)]
-    [InlineData("MON_0016", 7L, 4, 100, 12, 12, 13, 13, 2563, 2331, 2743, 2615, 2602)]
-    [InlineData("MON_0010", -99L, 3, 64, 0, 20, 0, 0, 625, 728, 865, 608, 813)]
-    [InlineData("MON_0014", long.MaxValue, 1, 12, 1, 1, 1, 1, 153, 148, 148, 160, 169)]
-    [InlineData("MON_0005", 1L, 0, 7, 0, 0, 0, 0, 71, 52, 81, 55, 79)]
+    [InlineData("MON_0001", 42L, 0, 1, 0, 0, 0, 0, 51, 35, 38, 49, 49)]
+    [InlineData("MON_0001", 42L, 4, 1, 0, 0, 0, 0, 142, 97, 106, 136, 138)]
+    [InlineData("MON_0002", 123456789L, 2, 37, 5, 3, 8, 2, 266, 346, 229, 234, 458)]
+    [InlineData("MON_0016", 7L, 4, 100, 12, 12, 13, 13, 2563, 2331, 3130, 2499, 2602)]
+    [InlineData("MON_0010", -99L, 3, 64, 0, 20, 0, 0, 625, 728, 993, 574, 813)]
+    [InlineData("MON_0014", long.MaxValue, 1, 12, 1, 1, 1, 1, 153, 148, 169, 153, 169)]
+    [InlineData("MON_0005", 1L, 0, 7, 0, 0, 0, 0, 67, 57, 81, 58, 79)]
     public void Stats_match_the_game_exactly(string species, long seed, int tier, int level, int tp, int tg, int tt, int tw,
         int power, int guard, int tricks, int wits, int health)
     {

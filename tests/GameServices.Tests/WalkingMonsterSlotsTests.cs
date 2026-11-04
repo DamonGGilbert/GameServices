@@ -78,20 +78,15 @@ public class WalkingMonsterSlotsTests : IClassFixture<ApiFactory>
 
     private Task<int> SlotsOf(Player p) => FromDb(db => db.WalkingProfiles.Where(x => x.UserId == p.Id).Select(x => x.MonsterSlots).FirstAsync());
 
-    private static Task<HttpResponseMessage> SendSlots(Player p, int slots) =>
-        p.Http.PutAsJsonAsync("/api/walking/monsters/progress", new ProgressRequest(null, new List<MonsterProgressDto>(), slots));
+    private Task SendSlots(Player p, int slots) => WithDb(async db => (await db.WalkingProfiles.FirstAsync(x => x.UserId == p.Id)).MonsterSlots = slots);
 
     [Fact]
-    public async Task TheGameSaysHowManySlots_KeptBetweenSixAndTwelve()
+    public async Task SlotsAreKeptBetweenSixAndTwelve_WhateverTheRowSays()
     {
         Player p = await NewPlayer();
         Assert.Equal(MonsterSlots.Starting, await SlotsOf(p));
-        Assert.Equal(HttpStatusCode.NoContent, (await SendSlots(p, 8)).StatusCode);
-        Assert.Equal(8, await SlotsOf(p));
-        await SendSlots(p, 99);
-        Assert.Equal(MonsterSlots.Most, await SlotsOf(p));
-        await SendSlots(p, 1);
-        Assert.Equal(MonsterSlots.Starting, await SlotsOf(p));
+        Assert.Equal(MonsterSlots.Most, MonsterSlots.Of(new WalkingProfile { MonsterSlots = 99 }));
+        Assert.Equal(MonsterSlots.Starting, MonsterSlots.Of(new WalkingProfile { MonsterSlots = 1 }));
     }
 
     [Fact]

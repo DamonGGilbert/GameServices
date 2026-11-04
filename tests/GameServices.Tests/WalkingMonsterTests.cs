@@ -140,8 +140,32 @@ public class WalkingMonsterTests : IClassFixture<LuckyMonsterFactory>
 
         WalkingMonsterDto after = Assert.Single(await Monsters(p));
         Assert.Equal(4, after.RarityTier);
-        Assert.Equal(3, after.RulesVersion);
+        Assert.Equal(MonsterRulesUpgrade.CurrentRulesVersion, after.RulesVersion);
         Assert.Equal(MonsterPotential.For(after.Seed, 4), after.Potential);
+    }
+
+    [Fact]
+    public async Task A_Legendary_stays_Legendary_when_only_the_clans_are_new()
+    {
+        Player p = await NewPlayer();
+        WalkingMonsterDto starter = Assert.Single(await Monsters(p));
+
+        using (IServiceScope scope = factory.Services.CreateScope())
+        {
+            AppDbContext db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            WalkingMonster m = await db.WalkingMonsters.FirstAsync(x => x.Id == starter.Id);
+            m.RarityTier = 4;
+            m.RulesVersion = 3;
+            m.Potential = 7;
+            await db.SaveChangesAsync();
+
+            Assert.True(MonsterRulesUpgrade.Run(db) >= 1);
+        }
+
+        WalkingMonsterDto after = Assert.Single(await Monsters(p));
+        Assert.Equal(4, after.RarityTier);
+        Assert.Equal(7, after.Potential);
+        Assert.Equal(MonsterRulesUpgrade.CurrentRulesVersion, after.RulesVersion);
     }
 
     // ------------------------------------------------------------------ the starter

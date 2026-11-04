@@ -228,13 +228,19 @@ public static class ChallengeEndpoints
         {
             return Problem($"You need {c.Stake:N0} Glimmer to match their stake.");
         }
-        Snapshot(c, theirs, fromStats, mine, toStats);
+
+        // The clans: the stats they fight with, kept with the fight so it can be replayed. (The BSTs are the ones on their cards.)
+        Clan fromClan = Clans.Of(catalog, theirs.SpeciesId, theirs.Seed), toClan = Clans.Of(catalog, mine.SpeciesId, mine.Seed);
+        MonsterBattleStats fromFighting = Clans.InBattle(fromStats, fromClan, toClan), toFighting = Clans.InBattle(toStats, toClan, fromClan);
+        Snapshot(c, theirs, fromFighting, mine, toFighting);
+        c.FromBst = fromStats.Total;
+        c.ToBst = toStats.Total;
 
         c.ToMonsterId = mine.Id;
         c.ToStrategy = (int)strategy;
         c.Seed = RandomNumberGenerator.GetInt32(int.MinValue, int.MaxValue) * 4294967296L + (uint)RandomNumberGenerator.GetInt32(int.MinValue, int.MaxValue);
 
-        DuelOutcome outcome = DuelRules.ResolveRanked(c.Seed, DuelStats.From(fromStats), (DuelStrategy)c.FromStrategy, DuelStats.From(toStats), strategy);
+        DuelOutcome outcome = DuelRules.ResolveRanked(c.Seed, DuelStats.From(fromFighting), (DuelStrategy)c.FromStrategy, DuelStats.From(toFighting), strategy);
         c.FromWon = outcome.PlayerWon;
         c.Chance = outcome.Player.Chance;
         c.Roll = outcome.Roll;
@@ -279,6 +285,7 @@ public static class ChallengeEndpoints
             loserSeason.UpdatedUtc = now;
 
             winner.RankedWins++;
+            await Progress.Explorer.CountWinTodayAsync(db, c.FromWon ? fromProfile : myProfile, now, cancel);
             loser.RankedLosses++;
             c.FromPointsChange = c.FromWon ? won : -lost;
             c.ToPointsChange = c.FromWon ? -lost : won;
@@ -317,7 +324,7 @@ public static class ChallengeEndpoints
         return Results.NoContent();
     }
 
-    private static async Task RefundAsync(AppDbContext db, Challenge c, ChallengeStatus how, CancellationToken cancel)
+    internal static async Task RefundAsync(AppDbContext db, Challenge c, ChallengeStatus how, CancellationToken cancel)
     {
         c.Status = how;
         c.DecidedUtc = DateTime.UtcNow;

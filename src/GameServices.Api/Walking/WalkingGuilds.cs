@@ -222,7 +222,7 @@ public static class WalkingGuilds
         {
             await db.SaveChangesAsync(cancel);
         }
-        catch (DbUpdateException)
+        catch (DbUpdateException ex) when (ex is not DbUpdateConcurrencyException)
         {
             // Two taps at once: the unique index let only one through.
             return Results.Problem("You've already collected last week's Journey reward.", statusCode: StatusCodes.Status409Conflict);

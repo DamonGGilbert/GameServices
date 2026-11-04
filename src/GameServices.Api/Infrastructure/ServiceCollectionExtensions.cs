@@ -5,6 +5,7 @@ using GameServices.Api.Data;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
 
 namespace GameServices.Api.Infrastructure;
@@ -122,9 +123,29 @@ public static class ServiceCollectionExtensions
         // ...and a generous limit on map squares (a phone wants 9 at once, then a few more as you walk).
         int mapPermits = configuration.GetValue("RateLimit:MapRequestsPerMinute", 120);
 
+        // ...and a speed limit on everything else: far more than a phone ever needs, and it stops anyone hammering the server.
+        int gamePermits = configuration.GetValue("RateLimit:GameRequestsPerMinute", 300);
+
         services.AddRateLimiter(limiter =>
         {
             limiter.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+            limiter.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(http =>
+            {
+                // (Long-lived connections and the health check don't count.)
+                if (http.Request.Path.StartsWithSegments("/health") || http.Request.Path.StartsWithSegments("/hubs") || http.Request.Path.StartsWithSegments("/ws"))
+                {
+                    return RateLimitPartition.GetNoLimiter("exempt");
+                }
+
+                string? player = http.User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+                string who = player != null ? "player:" + player : "address:" + (http.Connection.RemoteIpAddress?.ToString() ?? "unknown");
+                return RateLimitPartition.GetFixedWindowLimiter(who, _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = gamePermits,
+                    Window = TimeSpan.FromMinutes(1)
+                });
+            });
 
             limiter.AddPolicy("auth", httpContext =>
                 RateLimitPartition.GetFixedWindowLimiter(

@@ -226,6 +226,8 @@ public static class RouteEndpoints
             Kind kind = Kinds.First(k => k.Id == route.Kind);
             route.Status = RouteStatus.Completed;
             route.CompletedUtc = now;
+            profile.RoutesCompleted++;
+            if (kind.Weekly) profile.ChallengesCompleted++;
             glimmer = kind.Glimmer;
             WalkingWallet.Change(db, profile, glimmer, "route", kind.Name + " completed");
 

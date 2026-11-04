@@ -30,6 +30,9 @@ public class WalkingLifecycleService(IServiceScopeFactory scopes, ILogger<Walkin
                     using IServiceScope scope = scopes.CreateScope();
                     AppDbContext db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
+                    // Blocked words changed on the command line take effect here.
+                    await Moderation.BlockedWords.RefreshAsync(db);
+
                     int changed = await RunOnce(db, DateTime.UtcNow, stopping);
 
                     if (changed > 0)
@@ -49,6 +52,10 @@ public class WalkingLifecycleService(IServiceScopeFactory scopes, ILogger<Walkin
             // The server is shutting down. Normal.
         }
     }
+
+    public static readonly TimeSpan RouteKeptFor = TimeSpan.FromDays(7);
+    public static readonly TimeSpan ClosedReportKeptFor = TimeSpan.FromDays(365);
+    public static readonly TimeSpan BattleKeptFor = TimeSpan.FromDays(90);
 
     /// <summary>One pass of the job. Public so tests (and the race endpoints) can run it with any clock.</summary>
     public static async Task<int> RunOnce(AppDbContext db, DateTime now, CancellationToken cancel = default)
@@ -87,6 +94,23 @@ public class WalkingLifecycleService(IServiceScopeFactory scopes, ILogger<Walkin
 
         int guildRaces = await WalkingGuilds.RunOnce(db, now, cancel);
         int listings = await Monsters.MonsterMarket.SettleDue(db, now, cancel);
+
+        // Keep nothing we no longer need: a route shows where someone walked, so its path goes a week after it's over...
+        DateTime routesBefore = now - RouteKeptFor;
+        await db.WalkingRoutes.Where(r => r.ExpiresUtc < routesBefore && r.PathJson != "[]")
+            .ExecuteUpdateAsync(s => s.SetProperty(r => r.PathJson, "[]").SetProperty(r => r.CheckpointsJson, "[]"), cancel);
+
+        // ...and a report goes a year after it was closed.
+        DateTime reportsBefore = now - ClosedReportKeptFor;
+        await db.PlayerReports.Where(r => r.ClosedUtc < reportsBefore).ExecuteDeleteAsync(cancel);
+
+        // Old battles have been checked often enough, and the ledger keeps what they paid.
+        DateTime battlesBefore = now - BattleKeptFor;
+        await db.WalkingBattles.Where(b => b.CreatedUtc < battlesBefore).ExecuteDeleteAsync(cancel);
+
+        // The activity log has done its job after a few months (the ledger keeps every Glimmer for good).
+        DateTime activityBefore = now - Progress.ActivityLog.KeptFor;
+        await db.WalkingActivity.Where(a => a.AtUtc < activityBefore).ExecuteDeleteAsync(cancel);
 
         return expired + over.Count + guildRaces + listings;
     }

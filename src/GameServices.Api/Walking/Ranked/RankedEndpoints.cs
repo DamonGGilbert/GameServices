@@ -247,6 +247,13 @@ public static class RankedEndpoints
             opponentName = "Shadow " + (catalog.FindSpecies(species)?.Name ?? "monster");
         }
 
+        // The clans: the stats they'll fight with. (The BSTs are the ones on their cards: that's what matchmaking compares.)
+        Clan myClan = Clans.Of(catalog, attacker.SpeciesId, attacker.Seed), theirClan = Clans.Of(catalog, match.DefenderSpeciesId, match.DefenderSeed);
+        DuelStats attacking = Clans.InBattle(DuelStats.From(mine), myClan, theirClan);
+        DuelStats defending = Clans.InBattle(new DuelStats(match.DefenderPower, match.DefenderGuard, match.DefenderTricks, match.DefenderWits), theirClan, myClan);
+        (match.AttackerPower, match.AttackerGuard, match.AttackerTricks, match.AttackerWits) = (attacking.Power, attacking.Guard, attacking.Trickery, attacking.Wits);
+        (match.DefenderPower, match.DefenderGuard, match.DefenderTricks, match.DefenderWits) = (defending.Power, defending.Guard, defending.Trickery, defending.Wits);
+
         db.RankedMatches.Add(match);
         await db.SaveChangesAsync(cancel);
 
@@ -378,6 +385,7 @@ public static class RankedEndpoints
         if (outcome.PlayerWon)
         {
             profile.RankedWins++;
+            await Progress.Explorer.CountWinTodayAsync(db, profile, now, cancel);
             if (myEntry != null) myEntry.Wins++;
             if (theirEntry != null) theirEntry.Losses++;
             if (theirProfile != null) theirProfile.RankedLosses++;

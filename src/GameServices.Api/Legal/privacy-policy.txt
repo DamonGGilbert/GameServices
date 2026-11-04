@@ -1,0 +1,95 @@
+# Steplings Privacy Policy
+
+Last updated: 3 November 2026
+
+Steplings is a walking game. This page explains in plain English what information the game uses, why it uses it, and what choices you have. It doesn't use real money, show adverts or sell your information to anyone.
+
+## Who we are
+
+Steplings is made by [YOUR NAME]. If you have a question or a worry about your information, email [YOUR CONTACT EMAIL].
+
+## Who can play
+
+Steplings is for players aged 13 and over.
+
+When you first open the game it asks for the month and year you were born. That stays on your phone. If you make an online account it is also sent to our server once, to check your age. We keep only the fact that the check was passed, not your birthday.
+
+If we find out that someone under 13 has an account, we will delete it. If you are a parent or carer and think this has happened, please email us.
+
+## Playing without an account
+
+You can play on your own without an online account. Your progress is kept on your phone and removed when you uninstall the game. The services listed under "Other services" are still used to show the map, place names and weather.
+
+## What we keep if you make an account
+
+- Your username, which other players can see.
+- Your email address, used only to help you get back in if you forget your password.
+- Your password, stored scrambled so that nobody can read it, including us.
+- The country and title you choose to show, if any.
+- How many steps you walk each day and in total, and whether a report looked impossible (this keeps the game fair).
+- Your monsters and how they have grown, your Glimmer, and your trades, battles, medals and ranked results.
+- Your friends, your guild, who you have blocked, and the messages you send to friends and your guild.
+- Reports you send, and reports other players send about you.
+- A record of what happens on your account (see "A record of what you do" below).
+
+## Your location
+
+The game uses your phone's location to draw the map around you and to find what is nearby. Your exact position is never shown to other players.
+
+Some rough or short-lived location information does reach our server:
+
+- Map: your phone asks our server for the map squares around you (each roughly 1 km across). We don't keep a record of who asked for which square.
+- Routes: if you ask the game to plan a walking route, your starting point is sent to our server. The route is kept while you walk it and for a week after it ends, then it is erased.
+- Walk with friends: only if you switch this on, your rough area (about 100 m) is sent with your steps, so we can tell when you are walking with a friend. We keep only the latest one and never show it to anyone. Friends only see that you are walking together.
+- Finds: we note the kind of place where a monster was found (a park, for example), not where it was.
+
+## Steps
+
+The game counts your steps using your phone's motion sensor. If you choose to connect Apple Health or Health Connect, it reads your step counts from there too. It reads nothing else and never writes anything. Your daily totals are sent to our server if you have an account. You can turn this off in Options.
+
+## Other services
+
+These services help run the game, and they see your phone's internet address when it contacts them:
+
+- OpenStreetMap, for place names (your location rounded to about 100 m) and map information. Our server also fetches map squares from it.
+- Open-Meteo, for the real weather, if Live weather is on (your location rounded to about 5 km). You can turn it off in Options.
+- [YOUR HOSTING PROVIDER], which runs our server.
+- [YOUR EMAIL PROVIDER], which sends password reset emails.
+
+We don't use advertising or tracking services.
+
+## A record of what you do
+
+So we can keep the game fair, answer your questions and look into problems, we keep a log of what happens on your account: signing in, walking goals, levels, medals, rewards collected, finds on the map, monsters arriving or being traded, and each request your phone makes to change something, including any we refused.
+
+It never includes your password, your email address, what you say in messages, or where you are. We also keep a record of every change to your Glimmer, so that your balance can always be checked.
+
+## How long we keep it
+
+We keep your account information until you delete your account. We keep each line of the log of what you do for 90 days. While you have an account, we keep the details of each battle against a wild monster or a trainer for 90 days, so that results can be checked. A record of your Glimmer (what you earned and spent) stays until you delete your account.
+
+After you delete your account:
+
+- Your account, monsters, steps, friends, messages and the log of what you did are removed straight away.
+- A report about a player is kept, with a copy of what it was about, for up to a year after we have finished looking into it, so that we can keep players safe.
+- Copies in our backups are replaced within about 30 days.
+
+## Deleting your account
+
+In the game, go to Options, then Account & server, then Delete my account. You will need your password. This also removes your progress from your phone. If you can't get into the game, see [YOUR SERVER ADDRESS]/delete-account.
+
+## Your rights
+
+We use your information because we need it to run the game you asked to play, to keep it fair and safe, and, where you switch something on, because you chose to.
+
+You can ask us for a copy of your information, ask us to correct or delete it, or object to how we use it. Email us and we will reply within a month. A parent or carer can ask on behalf of their child.
+
+If you are unhappy with how we have handled your information, you can complain to the UK Information Commissioner's Office at ico.org.uk.
+
+## Staying safe
+
+Never share your home address, your school or your phone number with anyone in the game. You can block or report any player from their profile or from your chat with them. If something ever makes you feel unsafe or upset, tell a grown-up you trust.
+
+## Changes
+
+If we change this policy we will update the date at the top, and tell you in the game if the change is important.

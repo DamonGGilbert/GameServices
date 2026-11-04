@@ -1,8 +1,10 @@
 using GameServices.Api.Moderation;
+using GameServices.Api.Walking.Monsters;
 using System.Net.Mail;
 using System.Security.Claims;
 using System.Text.RegularExpressions;
 using GameServices.Api.Data;
+using GameServices.Api.Infrastructure;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.JsonWebTokens;
@@ -15,6 +17,7 @@ namespace GameServices.Api.Auth;
 ///   POST /api/auth/login      sign in (username OR email)
 ///   POST /api/auth/refresh    swap a refresh token for a new access token
 ///   POST /api/auth/logout     sign out (revokes the refresh token)
+///   POST /api/auth/delete-account   delete it for good (AccountDeletion)
 ///   GET  /api/me              who am I? (needs a valid access token)
 /// </summary>
 public static partial class AuthEndpoints
@@ -31,6 +34,7 @@ public static partial class AuthEndpoints
         auth.MapPost("/login", Login);
         auth.MapPost("/refresh", Refresh);
         auth.MapPost("/logout", Logout);
+        auth.MapPost("/delete-account", AccountDeletion.Delete).RequireAuthorization().RetriesOnConflict();
         auth.MapPasswordReset();
 
         app.MapGet("/api/me", Me).WithTags("Account").RequireAuthorization();
@@ -43,9 +47,11 @@ public static partial class AuthEndpoints
     // ------------------------------------------------------------
     private static async Task<IResult> Register(
         RegisterRequest request,
+        HttpContext http,
         AppDbContext db,
         TokenService tokens,
         IPasswordHasher<User> hasher,
+        IConfiguration configuration,
         CancellationToken cancel)
     {
         // 1. Never trust the client: check everything on the server.
@@ -54,6 +60,31 @@ public static partial class AuthEndpoints
         if (problems.Count > 0)
         {
             return Results.ValidationProblem(problems);
+        }
+
+        // Steplings accounts have a minimum age. The birthday is only looked at here - it isn't kept.
+        DateTime now = DateTime.UtcNow;
+        bool walking = string.Equals(http.Request.Headers[GameIds.Header].ToString().Trim(), GameIds.Walking, StringComparison.OrdinalIgnoreCase);
+        if (walking)
+        {
+            if (!AgeRules.IsRealBirthDate(request.BirthYear, request.BirthMonth, now))
+            {
+                return Problem("Please tell us the month and year you were born.", StatusCodes.Status400BadRequest, "birth_date_needed");
+            }
+
+            int minimum = configuration.GetValue("Accounts:MinimumAge", AgeRules.DefaultMinimumAge);
+            if (AgeRules.AgeIn(request.BirthYear!.Value, request.BirthMonth!.Value, now) < minimum)
+            {
+                return Problem("Sorry - Steplings accounts are for players aged " + minimum + " and over.", StatusCodes.Status403Forbidden, "too_young");
+            }
+        }
+
+        // Groundwork: the clan chosen for the starter, if the game asked (ClanChooser in the game: switched off for now).
+        Clan? clan = null;
+        if (walking && !string.IsNullOrWhiteSpace(request.Clan))
+        {
+            clan = Clans.Parse(request.Clan);
+            if (clan == null) return Problem("Please choose one of the six clans.", StatusCodes.Status400BadRequest, "unknown_clan");
         }
 
         string username = request.Username.Trim();
@@ -79,7 +110,8 @@ public static partial class AuthEndpoints
             NormalizedUsername = normalizedUsername,
             Email = email,
             NormalizedEmail = normalizedEmail,
-            LastLoginUtc = DateTime.UtcNow
+            LastLoginUtc = now,
+            AgeConfirmedUtc = walking ? now : null
         };
 
         user.PasswordHash = hasher.HashPassword(user, request.Password);
@@ -98,6 +130,14 @@ public static partial class AuthEndpoints
             return Problem("That username or email already has an account. Try signing in instead.", StatusCodes.Status409Conflict, "account_exists");
         }
 
+        if (walking)
+        {
+            Walking.Progress.ActivityLog.Add(db, user.Id, "account", "Created");
+            await db.SaveChangesAsync(cancel);
+        }
+
+        if (clan != null) await GiveStarter(http, db, user.Id, clan.Value, cancel);
+
         return Results.Created($"/api/me", response);
     }
 
@@ -106,6 +146,7 @@ public static partial class AuthEndpoints
     // ------------------------------------------------------------
     private static async Task<IResult> Login(
         LoginRequest request,
+        HttpContext http,
         AppDbContext db,
         TokenService tokens,
         IPasswordHasher<User> hasher,
@@ -134,6 +175,16 @@ public static partial class AuthEndpoints
         if (result == PasswordVerificationResult.Failed)
         {
             return invalid;
+        }
+
+        if (user.SuspendedUntilUtc > DateTime.UtcNow)
+        {
+            return Problem("This account is paused until " + user.SuspendedUntilUtc.Value.ToString("d MMMM yyyy") + " after a report from another player.", StatusCodes.Status403Forbidden, "suspended");
+        }
+
+        if (string.Equals(http.Request.Headers[GameIds.Header].ToString().Trim(), GameIds.Walking, StringComparison.OrdinalIgnoreCase))
+        {
+            Walking.Progress.ActivityLog.Add(db, user.Id, "sign-in", "");
         }
 
         // If we've since made the hashing stronger, upgrade this player's hash silently.
@@ -271,6 +322,27 @@ public static partial class AuthEndpoints
     private static UserDto ToDto(User user) => new(user.Id, user.Username, user.CreatedUtc);
 
     private static string? dummyHash;
+
+    // The starter in the chosen clan, straight away (otherwise the first visit brings one in any clan). If two sign-ups
+    // take the same serial number one has to try again; if it keeps failing the account is still fine, just without the choice.
+    private static async Task GiveStarter(HttpContext http, AppDbContext db, Guid owner, Clan clan, CancellationToken cancel)
+    {
+        MonsterFinder finder = http.RequestServices.GetRequiredService<MonsterFinder>();
+        for (int attempt = 0; attempt < 3; attempt++)
+        {
+            (string species, int tier, long seed, int potential) = finder.RollStarter(clan);
+            await MonsterEndpoints.Add(db, owner, species, tier, seed, potential, finder.Catalog.RulesVersion, "starter", null, DateTime.UtcNow.ToString("yyyy-MM-dd"), cancel);
+            try
+            {
+                await db.SaveChangesAsync(cancel);
+                return;
+            }
+            catch (DbUpdateException)
+            {
+                db.ChangeTracker.Clear();
+            }
+        }
+    }
 
     private static string DummyHash(IPasswordHasher<User> hasher)
     {

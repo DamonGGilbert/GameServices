@@ -18,7 +18,7 @@ public record TraderQuoteDto(Guid MonsterId, int Price, string? WhyNot);
 
 public record BazaarDto(int Glimmer, List<CardStyleDto> Styles, List<TraderStockDto> Stock, List<TraderQuoteDto> Quotes,
     int SellsLeft, int BuysLeft, bool HasRoom, int TonicPrice, int TonicsLeft, int MenderPrice, int MendersLeft, int MenderSteps,
-    int NameTags, int NameTagPrice, string Message = "");
+    int NameTags, int NameTagPrice, string Message = "", int Tonics = 0);
 
 public record WearStyleRequest(Guid MonsterId, string StyleId);
 
@@ -94,7 +94,7 @@ public static class BazaarEndpoints
             Math.Max(0, Trader.SellsPerDay - profile.TraderSellsToday), Math.Max(0, Trader.BuysPerDay - profile.TraderBuysToday),
             await MonsterSlots.HasRoomAsync(db, me, cancel),
             TonicPrice, Math.Max(0, TonicsPerDay - profile.TonicsToday), MenderPrice, Math.Max(0, MendersPerDay - profile.MendersToday), MenderSteps,
-            profile.NameTags, MonsterNames.NameTagPrice, message);
+            profile.NameTags, MonsterNames.NameTagPrice, message, profile.Tonics);
     }
 
     private static string? WhyNotSell(WalkingProfile profile, WalkingMonster m, HashSet<Guid> listed)
@@ -146,14 +146,7 @@ public static class BazaarEndpoints
 
         await MonsterHandover.Move(db, monster, me, DateTime.UtcNow, null, null, null, cancel);
         profile.TraderBuysToday++;
-        try
-        {
-            await db.SaveChangesAsync(cancel);
-        }
-        catch (DbUpdateConcurrencyException)
-        {
-            return Problem("Someone's just bought that one - have a look at what else Juniper has.", StatusCodes.Status409Conflict);
-        }
+        await db.SaveChangesAsync(cancel);
         return Results.Ok(await Dto(db, finder.Catalog, me, profile, "It's yours! Say hello to your new monster.", cancel));
     }
 
@@ -204,6 +197,7 @@ public static class BazaarEndpoints
             return Problem($"That's {TonicPrice:N0} Glimmer - you have {profile.Glimmer:N0}. Walking earns more!");
 
         profile.TonicsToday++;
+        profile.Tonics++;
         await db.SaveChangesAsync(cancel);
         return Results.Ok(await Dto(db, finder.Catalog, me, profile, "A Trail Tonic - it's in your bag for your next battle.", cancel));
     }

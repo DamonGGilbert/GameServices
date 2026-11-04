@@ -33,6 +33,7 @@ public class ApiFactory : WebApplicationFactory<Program>
         // Tests make lots of requests quickly -- don't let the rate limiter interfere
         // (it has its own dedicated test below).
         builder.UseSetting("RateLimit:AuthRequestsPerMinute", "1000");
+        builder.UseSetting("RateLimit:GameRequestsPerMinute", "100000");
 
         // Emails go to an in-memory outbox that the tests can read.
         builder.ConfigureServices(services =>

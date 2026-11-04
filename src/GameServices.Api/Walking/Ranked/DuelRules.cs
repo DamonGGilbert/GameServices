@@ -24,6 +24,7 @@ public sealed class DuelSide
     public int TrickeryAdvantage { get; set; }
     public int WalkingBonus { get; set; }
     public int ArenaBonus { get; set; }
+    public int SignatureBonus { get; set; }
     public int Score { get; set; }
     public float Chance { get; set; }
 }
@@ -47,12 +48,13 @@ public sealed class DuelOutcome
 /// </summary>
 public static class DuelRules
 {
-    public const float StrategyShift = 0.20f;
-    public const float TonicBoost = 0.15f;
+    public const int StrategyShiftPercent = 20;
+    public const int TonicPercent = 15;
     public const int StepsPerPip = 1000;
     public const int MaxPips = 10;
     public const float PipBonus = 0.02f;
-    public const float ArenaBoost = 0.08f;
+    public const int ArenaPercent = 8;
+    public const int SignaturePercent = 10;
     public const float MinChance = 0.05f;
     public const float MaxChance = 0.95f;
 
@@ -70,7 +72,7 @@ public static class DuelRules
             return s;
         }
 
-        int Take(int value) => (int)Math.Round(value * StrategyShift);
+        int Take(int value) => Percent(value, StrategyShiftPercent);
 
         int p = strategy == DuelStrategy.MaxPower ? 0 : Take(s.Power);
         int g = strategy == DuelStrategy.MaxGuard ? 0 : Take(s.Guard);
@@ -85,11 +87,16 @@ public static class DuelRules
             s.Wits - w + (strategy == DuelStrategy.MaxWits ? pot : 0));
     }
 
-    private static int Boost(int value) => (int)Math.Round(value * (1f + TonicBoost));
+    private static int Boost(int value) => Percent(value, 100 + TonicPercent);
+
+    // Whole numbers only, rounding halves up. Floats round differently on the server, in the Unity Editor and on a
+    // phone (90 x 1.15 can be 103 or 104), and every one of them has to get the same answer.
+    private static int Percent(int value, int percent) => (int)((value * (long)percent + 50) / 100);
 
     public static DuelOutcome Resolve(long seed,
         DuelStats playerStats, DuelStrategy playerStrategy, bool playerTonic, int playerSteps, bool playerArena,
-        DuelStats opponentStats, DuelStrategy opponentStrategy, bool opponentTonic, int opponentSteps, bool opponentArena)
+        DuelStats opponentStats, DuelStrategy opponentStrategy, bool opponentTonic, int opponentSteps, bool opponentArena,
+        bool playerSignature = false)
     {
         DuelSide me = Fill(playerStats, playerStrategy, playerTonic);
         DuelSide them = Fill(opponentStats, opponentStrategy, opponentTonic);
@@ -99,8 +106,8 @@ public static class DuelRules
         them.PowerAdvantage = Math.Max(0, them.After.Power - me.After.Guard);
         them.TrickeryAdvantage = Math.Max(0, them.After.Trickery - me.After.Wits);
 
-        Score(me, PipsFor(playerSteps), playerArena);
-        Score(them, PipsFor(opponentSteps), opponentArena);
+        Score(me, PipsFor(playerSteps), playerArena, playerSignature);
+        Score(them, PipsFor(opponentSteps), opponentArena, false);
 
         float chance = (me.Score + them.Score) > 0 ? me.Score / (float)(me.Score + them.Score) : 0.5f;
         me.Chance = Math.Max(MinChance, Math.Min(MaxChance, chance));
@@ -117,12 +124,13 @@ public static class DuelRules
     private static DuelSide Fill(DuelStats stats, DuelStrategy strategy, bool tonic) =>
         new() { Before = stats, Strategy = strategy, After = ApplyStrategy(stats, strategy, tonic) };
 
-    private static void Score(DuelSide side, int pips, bool arena)
+    private static void Score(DuelSide side, int pips, bool arena, bool signature)
     {
         int baseScore = side.After.Total + side.PowerAdvantage + side.TrickeryAdvantage;
         side.WalkingBonus = (int)Math.Round(baseScore * pips * PipBonus);
-        side.ArenaBonus = arena ? (int)Math.Round(baseScore * ArenaBoost) : 0;
-        side.Score = baseScore + side.WalkingBonus + side.ArenaBonus;
+        side.ArenaBonus = arena ? Percent(baseScore, ArenaPercent) : 0;
+        side.SignatureBonus = signature ? Percent(baseScore, SignaturePercent) : 0;
+        side.Score = baseScore + side.WalkingBonus + side.ArenaBonus + side.SignatureBonus;
     }
 
     /// <summary>How a computer-run fighter picks: by its style, with a little surprise, and a look at the other monster.</summary>

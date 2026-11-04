@@ -40,6 +40,9 @@ public class AppDbContext : DbContext
     public DbSet<GuildWarDuel> GuildWarDuels => Set<GuildWarDuel>();
     public DbSet<BossContribution> BossContributions => Set<BossContribution>();
     public DbSet<PasswordResetCode> PasswordResetCodes => Set<PasswordResetCode>();
+    public DbSet<PlayerReport> PlayerReports => Set<PlayerReport>();
+    public DbSet<BlockedWord> BlockedWords => Set<BlockedWord>();
+    public DbSet<WalkingBattle> WalkingBattles => Set<WalkingBattle>();
     public DbSet<UserAvatar> Avatars => Set<UserAvatar>();
     public DbSet<UserCosmeticImage> CosmeticImages => Set<UserCosmeticImage>();
 
@@ -53,6 +56,9 @@ public class AppDbContext : DbContext
     public DbSet<WalkingMonster> WalkingMonsters => Set<WalkingMonster>();
     public DbSet<MonsterSpeciesCount> MonsterSpeciesCounts => Set<MonsterSpeciesCount>();
     public DbSet<WalkingLedgerEntry> WalkingLedger => Set<WalkingLedgerEntry>();
+    public DbSet<WalkingAchievement> WalkingAchievements => Set<WalkingAchievement>();
+    public DbSet<WalkingMedal> WalkingMedals => Set<WalkingMedal>();
+    public DbSet<WalkingActivity> WalkingActivity => Set<WalkingActivity>();
     public DbSet<MonsterOffer> MonsterOffers => Set<MonsterOffer>();
     public DbSet<MonsterSwap> MonsterSwaps => Set<MonsterSwap>();
     public DbSet<MarketListing> MarketListings => Set<MarketListing>();
@@ -76,6 +82,27 @@ public class AppDbContext : DbContext
 
     private class NullableUtcConverter() : ValueConverter<DateTime?, DateTime?>(
         v => v, v => v.HasValue ? DateTime.SpecifyKind(v.Value, DateTimeKind.Utc) : v);
+
+    // Every change to something versioned moves its version on, so a save made from an older read fails (IVersioned).
+    public override int SaveChanges(bool acceptAllChangesOnSuccess)
+    {
+        BumpVersions();
+        return base.SaveChanges(acceptAllChangesOnSuccess);
+    }
+
+    public override Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
+    {
+        BumpVersions();
+        return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+    }
+
+    private void BumpVersions()
+    {
+        foreach (var entry in ChangeTracker.Entries<IVersioned>())
+        {
+            if (entry.State == EntityState.Modified) entry.Entity.Version++;
+        }
+    }
 
     protected override void OnModelCreating(ModelBuilder model)
     {
@@ -329,6 +356,30 @@ public class AppDbContext : DbContext
             m.HasOne<User>().WithMany().HasForeignKey(x => x.OwnerId).OnDelete(DeleteBehavior.Cascade);
         });
 
+        model.Entity<WalkingAchievement>(a =>
+        {
+            a.HasKey(x => new { x.UserId, x.AchievementId });
+            a.Property(x => x.AchievementId).HasMaxLength(40);
+            a.HasOne<User>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        model.Entity<WalkingMedal>(m =>
+        {
+            m.HasKey(x => new { x.UserId, x.TrackId });
+            m.Property(x => x.TrackId).HasMaxLength(24);
+            m.HasOne<User>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        model.Entity<WalkingActivity>(a =>
+        {
+            a.HasKey(x => x.Id);
+            a.Property(x => x.Kind).HasMaxLength(24).IsRequired();
+            a.Property(x => x.Detail).HasMaxLength(200);
+            a.HasIndex(x => new { x.UserId, x.AtUtc });
+            a.HasIndex(x => x.AtUtc);
+            a.HasOne<User>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
+        });
+
         model.Entity<WalkingLedgerEntry>(l =>
         {
             l.HasKey(x => x.Id);
@@ -357,6 +408,58 @@ public class AppDbContext : DbContext
             s.HasOne<WalkingMonster>().WithMany().HasForeignKey(x => x.FromMonsterId).OnDelete(DeleteBehavior.Cascade);
             s.HasOne<WalkingMonster>().WithMany().HasForeignKey(x => x.ToMonsterId).OnDelete(DeleteBehavior.Cascade);
         });
+
+        model.Entity<WalkingBattle>(b =>
+        {
+            b.HasKey(x => x.Id);
+            b.Property(x => x.OpponentId).HasMaxLength(32).IsRequired();
+            b.Property(x => x.MonsterIds).HasMaxLength(120).IsRequired();
+            b.Property(x => x.Version).IsConcurrencyToken();
+            b.HasIndex(x => new { x.UserId, x.Status });
+            b.HasIndex(x => x.FoughtUtc);
+            b.HasOne<User>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        model.Entity<BlockedWord>(w =>
+        {
+            w.HasKey(x => x.Id);
+            w.Property(x => x.Text).HasMaxLength(80).IsRequired();
+            w.Property(x => x.Category).HasMaxLength(16).IsRequired();
+            w.HasIndex(x => new { x.Text, x.Kind }).IsUnique();
+        });
+
+        model.Entity<PlayerReport>(r =>
+        {
+            r.HasKey(x => x.Id);
+            r.Property(x => x.ReportedName).HasMaxLength(40).IsRequired();
+            r.Property(x => x.Reason).HasMaxLength(16).IsRequired();
+            r.Property(x => x.Details).HasMaxLength(500);
+            r.Property(x => x.ClosedNote).HasMaxLength(500);
+            r.HasIndex(x => new { x.ReporterId, x.CreatedUtc });
+            r.HasIndex(x => x.ClosedUtc);
+            // Reports stay when an account goes: they just stop pointing at it.
+            r.HasOne<User>().WithMany().HasForeignKey(x => x.ReporterId).OnDelete(DeleteBehavior.SetNull);
+            r.HasOne<User>().WithMany().HasForeignKey(x => x.ReportedUserId).OnDelete(DeleteBehavior.SetNull);
+        });
+
+        // Two requests can't both spend the same Glimmer or sell the same monster (IVersioned).
+        model.Entity<WalkingProfile>().Property(x => x.Version).IsConcurrencyToken();
+        model.Entity<WalkingDay>().Property(x => x.Version).IsConcurrencyToken();
+        model.Entity<WalkingMonster>().Property(x => x.Version).IsConcurrencyToken();
+        model.Entity<MonsterOffer>().Property(x => x.Version).IsConcurrencyToken();
+        model.Entity<MonsterSwap>().Property(x => x.Version).IsConcurrencyToken();
+        model.Entity<MarketListing>().Property(x => x.Version).IsConcurrencyToken();
+        model.Entity<Challenge>().Property(x => x.Version).IsConcurrencyToken();
+        model.Entity<RankedMatch>().Property(x => x.Version).IsConcurrencyToken();
+        model.Entity<WalkingMonster>().Property(x => x.XpDay).HasMaxLength(10);
+        model.Entity<WalkingProfile>().Property(x => x.BattleDay).HasMaxLength(10);
+        model.Entity<WalkingProfile>().Property(x => x.RewardCardDay).HasMaxLength(10);
+        model.Entity<WalkingProfile>().Property(x => x.PlayerLevel).HasDefaultValue(1);
+        model.Entity<WalkingProfile>().Property(x => x.RestDays).HasDefaultValue(1);
+        model.Entity<WalkingProfile>().Property(x => x.BoostMultiplier).HasDefaultValue(1f);
+        model.Entity<WalkingProfile>().Property(x => x.LastGoalDay).HasMaxLength(10);
+        model.Entity<WalkingProfile>().Property(x => x.RestDaysWeek).HasMaxLength(10);
+        model.Entity<WalkingMonster>().Property(x => x.TrainingDay).HasMaxLength(10);
 
         model.Entity<WalkingProfile>().Property(x => x.MonsterSlots).HasDefaultValue(6);
         model.Entity<WalkingProfile>().Property(x => x.Title).HasMaxLength(40);

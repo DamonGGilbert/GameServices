@@ -5,6 +5,96 @@ namespace GameServices.Api.Data;
 /// login can be used by the card game, the walking game and any future game.
 /// (Per-game data -- cards, steps, guild membership -- hangs off this later.)
 /// </summary>
+public enum WalkingBattleStatus { Open = 0, Fought = 1, Expired = 2 }
+
+/// <summary>A battle against a wild monster or a trainer: everything needed to play it again and check it (Walking/Battles).</summary>
+public class WalkingBattle : IVersioned
+{
+    public int Version { get; set; }
+
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid UserId { get; set; }
+
+    /// <summary>"wild", or a trainer's id.</summary>
+    public string OpponentId { get; set; } = "";
+
+    /// <summary>Which of the walker's monsters are fighting (one, or three for a team), and the opponents' recipes.</summary>
+    public string MonsterIds { get; set; } = "";
+    public string OpponentsJson { get; set; } = "[]";
+
+    public long Seed { get; set; }
+    public int Style { get; set; }
+    public int MyPower { get; set; }
+    public int MyGuard { get; set; }
+    public int MyTricks { get; set; }
+    public int MyWits { get; set; }
+    public int TheirPower { get; set; }
+    public int TheirGuard { get; set; }
+    public int TheirTricks { get; set; }
+    public int TheirWits { get; set; }
+    public bool MyArena { get; set; }
+    public bool TheirArena { get; set; }
+
+    public WalkingBattleStatus Status { get; set; } = WalkingBattleStatus.Open;
+    public DateTime CreatedUtc { get; set; } = DateTime.UtcNow;
+    public DateTime ExpiresUtc { get; set; }
+    public DateTime? FoughtUtc { get; set; }
+
+    // Once fought.
+    public int Strategy { get; set; }
+    public int TheirStrategy { get; set; }
+    public bool Tonic { get; set; }
+    public bool Signature { get; set; }
+    public int Stake { get; set; }
+    public bool Won { get; set; }
+    public float Chance { get; set; }
+    public float Roll { get; set; }
+    public int GlimmerChange { get; set; }
+    public int PowerChange { get; set; }
+}
+
+public enum BlockedWordKind { Anywhere = 0, Whole = 1, Combination = 2, Allowed = 3 }
+
+/// <summary>One entry in the list of words the game blocks (Moderation/BlockedWords).</summary>
+public class BlockedWord
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+
+    /// <summary>Plain lower-case letters; a combination has single spaces between its words.</summary>
+    public string Text { get; set; } = "";
+    public BlockedWordKind Kind { get; set; }
+
+    /// <summary>Why it's on the list: swearing, sexual, hate, harm, safety, drugs, innocent or added.</summary>
+    public string Category { get; set; } = "";
+    public DateTime AddedUtc { get; set; } = DateTime.UtcNow;
+}
+
+/// <summary>A player reporting another (Moderation/ReportEndpoints). It outlives both accounts: see AccountDeletion.</summary>
+public class PlayerReport
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid? ReporterId { get; set; }
+    public Guid? ReportedUserId { get; set; }
+    public string ReportedName { get; set; } = "";
+    public string Reason { get; set; } = "";
+    public string Details { get; set; } = "";
+
+    /// <summary>A copy of what the report is about: their last messages to the reporter, their title, monsters' names.</summary>
+    public string Evidence { get; set; } = "";
+    public DateTime CreatedUtc { get; set; } = DateTime.UtcNow;
+    public DateTime? ClosedUtc { get; set; }
+    public string ClosedNote { get; set; } = "";
+}
+
+/// <summary>
+/// Saving one of these only works if nobody else has changed it since it was read (AppDbContext adds 1 to Version on
+/// every change). Infrastructure/RetryOnConflict runs the loser of a race again with fresh data.
+/// </summary>
+public interface IVersioned
+{
+    int Version { get; set; }
+}
+
 public class User
 {
     public Guid Id { get; set; } = Guid.NewGuid();
@@ -46,6 +136,12 @@ public class User
 
     /// <summary>The player's PROFILE CARD choices (greeting, favourite card and deck, stats), as JSON. See ProfileCardEndpoints.</summary>
     public string ProfileJson { get; set; } = "";
+
+    /// <summary>When a walking-game account passed the age check (Auth/AgeRules). The birthday itself is never kept.</summary>
+    public DateTime? AgeConfirmedUtc { get; set; }
+
+    /// <summary>Can't sign in until then, after a report was looked into (Moderation/ReportAdmin). Null = fine.</summary>
+    public DateTime? SuspendedUntilUtc { get; set; }
 
     public List<RefreshToken> RefreshTokens { get; set; } = new();
 }
@@ -431,8 +527,10 @@ public class UserCosmeticImage
 /// One player's walking-game record. The SERVER keeps these numbers: the game reports steps, the server decides how
 /// many are believable (see Walking/StepRules) and adds only those.
 /// </summary>
-public class WalkingProfile
+public class WalkingProfile : IVersioned
 {
+    public int Version { get; set; }
+
     public Guid UserId { get; set; }
 
     /// <summary>Every accepted step, ever. Step races measure progress from this.</summary>
@@ -462,7 +560,7 @@ public class WalkingProfile
     /// <summary>False until the first sync brought the phone's balance across.</summary>
     public bool WalletStarted { get; set; }
 
-    /// <summary>Phone-earned Glimmer accepted today (UTC day), up to a daily allowance.</summary>
+    // (a phone can't earn Glimmer any more: everything is earned here - kept so old rows still load)
     public string PhoneGlimmerDay { get; set; } = "";
     public int PhoneGlimmerToday { get; set; }
 
@@ -518,9 +616,107 @@ public class WalkingProfile
     public int TonicsToday { get; set; }
     public int MendersToday { get; set; }
 
-    /// <summary>Wild battles won today that took a bite of power (Walking/Monsters/WildBattles), and the day they count for.</summary>
+    /// <summary>Wild battles won today that took a bite of power (Walking/Battles), and the day they count for.</summary>
     public string WildDay { get; set; } = "";
     public int WildBitesToday { get; set; }
+
+    // ---- Battles against wild monsters and trainers (Walking/Battles) ----
+
+    /// <summary>Glimmer battles have paid today, and the UTC day that's for.</summary>
+    public string BattleDay { get; set; } = "";
+    public int BattleGlimmerToday { get; set; }
+
+    /// <summary>Trail Tonics held: earned by walking or bought at the Tonic Stand, used in a battle.</summary>
+    public int Tonics { get; set; }
+
+    /// <summary>Steps with the companion not yet worth a point of experience.</summary>
+    public int CompanionStepRemainder { get; set; }
+
+    /// <summary>The first sync has been and gone, so a starter's progress from before signing in can't be claimed again.</summary>
+    public bool GuestProgressTaken { get; set; }
+
+    public string RewardCardDay { get; set; } = "";   // (mystery cards are milestone rewards now - kept so old rows still load)
+    public int RewardCardsToday { get; set; }
+
+    // ---- An explorer's progress, all kept here (Walking/Progress/Explorer) ----
+
+    /// <summary>False until the phone has brought what it had from before signing in (ProgressEndpoints.Start).</summary>
+    public bool ProgressStarted { get; set; }
+
+    public int PlayerLevel { get; set; } = 1;
+    public int PlayerXp { get; set; }
+
+    /// <summary>The phone's time zone at its last report: it's what makes "today" the walker's today.</summary>
+    public int UtcOffsetMinutes { get; set; }
+
+    public int DailyGoalsCompleted { get; set; }
+    public int CurrentStreak { get; set; }
+    public int LongestStreak { get; set; }
+    public string LastGoalDay { get; set; } = "";
+    public int RestDays { get; set; } = 1;
+    public string RestDaysWeek { get; set; } = "";
+
+    /// <summary>Steps from before signing in: they count for the ladders, and nothing else.</summary>
+    public long StartingSteps { get; set; }
+    public long LifetimeMetres { get; set; }
+    public int AreasVisited { get; set; }
+    public int RareFinds { get; set; }
+    public int LegendaryFinds { get; set; }
+    public int BattlesWon { get; set; }
+    public int BattlesLost { get; set; }
+    public int TradesCompleted { get; set; }
+    public int RoutesCompleted { get; set; }
+    public int ChallengesCompleted { get; set; }
+    public long ClanSteps { get; set; }
+
+    /// <summary>Shimmer fragments held.</summary>
+    public int Fragments { get; set; }
+
+    /// <summary>Finds on the map since the last Stepling (Walking/Progress/Discoveries): it's never too long between them.</summary>
+    public int FindsSinceMonster { get; set; }
+    public DateTime? BoostUntilUtc { get; set; }
+    public float BoostMultiplier { get; set; } = 1f;
+
+    /// <summary>The game's TrainingFocus: 0 balanced, or the stat your companion's daily point goes on.</summary>
+    public int TrainingFocus { get; set; }
+
+    // One to a line: the species they've ever had, and what they've earned.
+    public string DiscoveredSpecies { get; set; } = "";
+    public string Titles { get; set; } = "";
+    public string Badges { get; set; } = "";
+    public string Cosmetics { get; set; } = "";
+}
+
+/// <summary>An achievement a walker has unlocked (and whether its reward has been collected).</summary>
+public class WalkingAchievement
+{
+    public Guid UserId { get; set; }
+    public string AchievementId { get; set; } = "";
+    public bool Unlocked { get; set; }
+    public bool Claimed { get; set; }
+    public DateTime? UnlockedUtc { get; set; }
+}
+
+/// <summary>How far up a medal ladder a walker has got, and how many of those medals' rewards they've collected.</summary>
+public class WalkingMedal
+{
+    public Guid UserId { get; set; }
+    public string TrackId { get; set; } = "";
+    public int Reached { get; set; }
+    public int Claimed { get; set; }
+
+    /// <summary>One line for each medal: "when (unix time):rung".</summary>
+    public string EarnedUnix { get; set; } = "";
+}
+
+/// <summary>One thing a walker did (Walking/Progress/ActivityLog says what goes in, what never does, and how long it's kept).</summary>
+public class WalkingActivity
+{
+    public long Id { get; set; }
+    public Guid UserId { get; set; }
+    public DateTime AtUtc { get; set; } = DateTime.UtcNow;
+    public string Kind { get; set; } = "";
+    public string Detail { get; set; } = "";
 }
 
 /// <summary>One of a walker's (up to 3) monsters entered into ranked, and how it fights when attacked.</summary>
@@ -543,8 +739,10 @@ public enum RankedMatchStatus { Open = 0, Fought = 1, Expired = 2 }
 /// One ranked fight: set up when "Fight" is tapped (the opponent and both monsters' stats are fixed then, so what the
 /// player sees is what they fight), then decided when they pick a strategy.
 /// </summary>
-public class RankedMatch
+public class RankedMatch : IVersioned
 {
+    public int Version { get; set; }
+
     public Guid Id { get; set; } = Guid.NewGuid();
     public Guid AttackerId { get; set; }
     public Guid AttackerMonsterId { get; set; }
@@ -603,8 +801,10 @@ public enum ChallengeStatus { Pending = 0, Fought = 1, Declined = 2, Cancelled =
 /// The challenger's monster and secret strategy are set when it's sent; the other walker's when they accept - and then
 /// the server decides it straight away.
 /// </summary>
-public class Challenge
+public class Challenge : IVersioned
 {
+    public int Version { get; set; }
+
     public Guid Id { get; set; } = Guid.NewGuid();
     public Guid FromUserId { get; set; }
     public Guid ToUserId { get; set; }
@@ -686,14 +886,30 @@ public class RankedSeasonRecord
 }
 
 /// <summary>Accepted steps for one player on one day (the player's own calendar day, "yyyy-MM-dd").</summary>
-public class WalkingDay
+public class WalkingDay : IVersioned
 {
+    public int Version { get; set; }
+
     public Guid Id { get; set; } = Guid.NewGuid();
     public Guid UserId { get; set; }
     public string Day { get; set; } = "";
     public int Steps { get; set; }
     public int RejectedSteps { get; set; }
     public DateTime UpdatedUtc { get; set; } = DateTime.UtcNow;
+
+    // ---- What's happened today (Walking/Progress). Each day's limits are kept on its own row. ----
+    public bool GoalCompleted { get; set; }
+    public int Discoveries { get; set; }
+    public int BattlesWon { get; set; }
+    public int Trades { get; set; }
+    public int Areas { get; set; }
+    public int Metres { get; set; }
+
+    /// <summary>The milestones collected, one to a line.</summary>
+    public string ClaimedMilestones { get; set; } = "";
+
+    /// <summary>Today's quests, as JSON (Explorer.QuestEntry).</summary>
+    public string Quests { get; set; } = "";
 }
 
 /// <summary>A friendly "Keep going!" from one friend to another. Limited per friend per day.</summary>
@@ -784,8 +1000,10 @@ public class GuildStepRace
 /// One of a walker's monsters, made by the server (see Walking/Monsters). The server keeps what it rolled; the game
 /// builds every other detail (looks, personality, stats) from SpeciesId + Seed + RarityTier.
 /// </summary>
-public class WalkingMonster
+public class WalkingMonster : IVersioned
 {
+    public int Version { get; set; }
+
     public Guid Id { get; set; } = Guid.NewGuid();
     public Guid OwnerId { get; set; }
     public string SpeciesId { get; set; } = "";
@@ -821,6 +1039,12 @@ public class WalkingMonster
     public int TrainedWits { get; set; }
     public int TrainingSteps { get; set; }
 
+    /// <summary>The walker's day TrainingSteps belongs to: the bar starts again each day.</summary>
+    public string TrainingDay { get; set; } = "";
+
+    /// <summary>When its finder made friends with it (a find on the map, Walking/Progress/Discoveries). Once only.</summary>
+    public DateTime? BefriendedUtc { get; set; }
+
     /// <summary>When it joined its current walker (offers need it to have settled in first).</summary>
     public DateTime AcquiredUtc { get; set; } = DateTime.UtcNow;
     public int TradeCount { get; set; }
@@ -852,6 +1076,16 @@ public class WalkingMonster
     /// <summary>The card style it wears (bought at the Monster Maker - Walking/Bazaar/CardStyles). Empty = plain. It
     /// travels with the monster to a new home.</summary>
     public string CardStyle { get; set; } = "";
+
+    /// <summary>How much experience the server has taken on today, and the UTC day that's for (see MonsterLevels).</summary>
+    public string XpDay { get; set; } = "";
+    public int XpToday { get; set; }
+
+    /// <summary>After losing to a trainer it snoozes until its walker's lifetime steps reach this (Walking/Battles).</summary>
+    public long RestUntilSteps { get; set; }
+
+    /// <summary>Steps walked with its walker as their companion: enough of them teach it a signature move.</summary>
+    public long BondSteps { get; set; }
 }
 
 /// <summary>How many of each species have ever been found (for serial numbers).</summary>
@@ -876,8 +1110,10 @@ public class WalkingLedgerEntry
 public enum OfferStatus { Pending = 0, Accepted = 1, Declined = 2, Cancelled = 3, Expired = 4 }
 
 /// <summary>An offer of Glimmer for a friend's monster (see Walking/Monsters/MonsterOffers). The Glimmer is held until it's answered.</summary>
-public class MonsterOffer
+public class MonsterOffer : IVersioned
 {
+    public int Version { get; set; }
+
     public Guid Id { get; set; } = Guid.NewGuid();
     public Guid MonsterId { get; set; }
     public Guid FromUserId { get; set; }
@@ -893,8 +1129,10 @@ public class MonsterOffer
 public enum SwapStatus { Pending = 0, Done = 1, Declined = 2, Cancelled = 3, Expired = 4, Closed = 5 }
 
 /// <summary>A Daily Swap: one walker's monster for a friend's (see Walking/Monsters/MonsterSwaps).</summary>
-public class MonsterSwap
+public class MonsterSwap : IVersioned
 {
+    public int Version { get; set; }
+
     public Guid Id { get; set; } = Guid.NewGuid();
     public Guid FromUserId { get; set; }
     public Guid ToUserId { get; set; }
@@ -912,8 +1150,10 @@ public class MonsterSwap
 public enum ListingStatus { Active = 0, Sold = 1, Expired = 2, Cancelled = 3, Closed = 4 }
 
 /// <summary>A monster on the Market (see Walking/Monsters/MonsterMarket): bids until it ends, or Buy Now straight away.</summary>
-public class MarketListing
+public class MarketListing : IVersioned
 {
+    public int Version { get; set; }
+
     public Guid Id { get; set; } = Guid.NewGuid();
     public Guid MonsterId { get; set; }
     public Guid SellerId { get; set; }

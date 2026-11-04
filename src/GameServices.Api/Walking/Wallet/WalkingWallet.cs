@@ -5,30 +5,28 @@ using Microsoft.EntityFrameworkCore;
 
 namespace GameServices.Api.Walking.Wallet;
 
-public record WalletDto(int Glimmer, int PhoneEarnedToday, int PhoneDailyCap, int StepsPerGlimmer);
+public record WalletDto(int Glimmer, int StepsPerGlimmer, int Tonics = 0);
 
-/// <summary>PhoneDelta: Glimmer won or lost on the phone since the last sync. PhoneBalance: the phone's balance (first sync only).</summary>
-public record WalletSyncRequest(int PhoneDelta, int PhoneBalance);
+/// <summary>PhoneBalance: the Glimmer a phone has from before it signed in (taken at the first sync only).</summary>
+public record WalletSyncRequest(int PhoneBalance);
 
 /// <summary>
 /// THE WALKING GAME'S GLIMMER, kept on the server (so packs and offers can't be paid for with made-up Glimmer).
 ///
 ///   GET  /api/walking/wallet        my balance
-///   POST /api/walking/wallet/sync   add what the phone earned (battles, quests, milestones) and get the balance
+///   POST /api/walking/wallet/sync   the first time: bring across what a phone has from before it signed in
 ///
 /// Where Glimmer comes from:
 ///   * walking - 1 Glimmer for every 100 steps the server accepts (added with each step report)
-///   * the Guild Journey reward (added when it's collected)
-///   * selling a monster to a friend, and Glimmer back from packs
-///   * rewards earned on the phone: added at each sync, up to 300 a day. The server can't check a battle that
-///     happened on the phone, so it believes a sensible amount and no more - a hacked phone can't print Glimmer.
-///   * the first sync brings the phone's existing balance across (up to 1,000)
+///   * milestones, quests, achievements, medals, streaks and finds on the map (Walking/Progress), and battles
+///   * the Guild Journey reward (added when it's collected), and selling a monster
+///   * the first sync brings the phone's existing balance across (up to 1,000). After that a phone can't add anything:
+///     it only ever shows the balance kept here, so a hacked phone can't print Glimmer.
 /// Every change is written to a ledger, so a balance can always be explained.
 /// </summary>
 public static class WalkingWallet
 {
     public const int StepsPerGlimmer = 100;
-    public const int PhoneDailyCap = 300;
     public const int StartingBalanceCap = 1000;
 
     public static RouteGroupBuilder MapWalkingWalletEndpoints(this RouteGroupBuilder group)
@@ -57,24 +55,6 @@ public static class WalkingWallet
             profile.WalletStarted = true;
             int start = Math.Clamp(request?.PhoneBalance ?? 0, 0, StartingBalanceCap);
             if (start > 0) Change(db, profile, start, "start", "Glimmer brought over from this phone");
-        }
-        else if (request != null && request.PhoneDelta != 0)
-        {
-            if (request.PhoneDelta < 0)
-            {
-                // Spent or lost on the phone (e.g. a battle stake): always taken, never below zero.
-                Change(db, profile, -Math.Min(-request.PhoneDelta, profile.Glimmer), "phone", "Spent in the game");
-            }
-            else
-            {
-                RollPhoneDay(profile);
-                int allowed = Math.Min(request.PhoneDelta, PhoneDailyCap - profile.PhoneGlimmerToday);
-                if (allowed > 0)
-                {
-                    profile.PhoneGlimmerToday += allowed;
-                    Change(db, profile, allowed, "phone", "Battles, quests and milestones");
-                }
-            }
         }
 
         await db.SaveChangesAsync(cancel);
@@ -110,18 +90,5 @@ public static class WalkingWallet
         return true;
     }
 
-    public static WalletDto ToDto(WalkingProfile p)
-    {
-        RollPhoneDay(p);
-        return new WalletDto(p.Glimmer, p.PhoneGlimmerToday, PhoneDailyCap, StepsPerGlimmer);
-    }
-
-    // The phone allowance is per UTC day.
-    private static void RollPhoneDay(WalkingProfile p)
-    {
-        string today = DateTime.UtcNow.ToString("yyyy-MM-dd");
-        if (p.PhoneGlimmerDay == today) return;
-        p.PhoneGlimmerDay = today;
-        p.PhoneGlimmerToday = 0;
-    }
+    public static WalletDto ToDto(WalkingProfile p) => new(p.Glimmer, StepsPerGlimmer, p.Tonics);
 }

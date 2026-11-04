@@ -24,6 +24,10 @@ public class ContentFilterTests
     [InlineData("retarded")]
     [InlineData("nazis")]
     [InlineData("kys")]
+    [InlineData("ass!")]
+    [InlineData("you ass!!!")]
+    [InlineData("a$$")]
+    [InlineData("fuck!")]
     public void Bad_words_are_caught(string text)
     {
         Assert.False(ContentFilter.IsClean(text));

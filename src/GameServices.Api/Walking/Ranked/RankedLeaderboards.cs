@@ -163,6 +163,7 @@ public static class RankedLeaderboards
         last.RewardClaimed = true;
         WalkingProfile profile = await WalkingEndpoints.GetOrCreateProfile(db, me, cancel);
         WalkingWallet.Change(db, profile, reward.Glimmer, "season", reward.SeasonName + " ranked season: " + reward.Tier);
+        profile.Titles = Progress.Explorer.WithItem(profile.Titles, reward.Title);
         await db.SaveChangesAsync(cancel);
 
         return Results.Ok(reward with { Claimed = true, CanClaim = false });

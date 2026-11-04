@@ -240,45 +240,6 @@ public class WalkingBazaarTests : IClassFixture<ApiFactory>
         Assert.Equal(0, whole.CrystalPower);
     }
 
-    // ------------------------------------------------------------------ wild battles
-
-    [Fact]
-    public async Task A_wild_win_takes_a_small_bite_three_a_day()
-    {
-        Player p = await NewPlayer();
-        Guid monster = (await p.Http.GetFromJsonAsync<List<WalkingMonsterDto>>("/api/walking/monsters"))![0].Id;
-        WalkingMonster before = await FromDb(db => db.WalkingMonsters.AsNoTracking().FirstAsync(m => m.Id == monster));
-        int myPower = PowerBattles.PowerOf(RankedEndpoints.StatsOf(Catalog, before));
-
-        // A wild monster is about as strong as yours: a huge claim is taken as a quarter above yours at most.
-        HttpResponseMessage r = await p.Http.PostAsJsonAsync($"/api/walking/monsters/{monster}/wild", new WildBattleRequest(true, 1_000_000));
-        WildBattleResultDto win = (await r.Content.ReadFromJsonAsync<WildBattleResultDto>())!;
-        Assert.Equal(PowerBattles.Share((int)Math.Ceiling(myPower * WildBattles.MostAboveMine), PowerBattles.WildBiteShare), win.PowerChange);
-        Assert.Equal(win.PowerChange, win.Monster.AbsorbedPower + win.Monster.AbsorbedGuard + win.Monster.AbsorbedTricks + win.Monster.AbsorbedWits);
-
-        for (int i = 1; i < PowerBattles.WildBitesPerDay; i++) await p.Http.PostAsJsonAsync($"/api/walking/monsters/{monster}/wild", new WildBattleRequest(true, 10));
-        WildBattleResultDto noMore = (await (await p.Http.PostAsJsonAsync($"/api/walking/monsters/{monster}/wild", new WildBattleRequest(true, 10)))
-            .Content.ReadFromJsonAsync<WildBattleResultDto>())!;
-        Assert.Equal(0, noMore.PowerChange);
-        Assert.Equal(0, noMore.BitesLeftToday);
-    }
-
-    [Fact]
-    public async Task A_wild_loss_turns_the_monster_to_crystal()
-    {
-        Player p = await NewPlayer();
-        Guid monster = (await p.Http.GetFromJsonAsync<List<WalkingMonsterDto>>("/api/walking/monsters"))![0].Id;
-        WildBattleResultDto lost = (await (await p.Http.PostAsJsonAsync($"/api/walking/monsters/{monster}/wild", new WildBattleRequest(false, 100)))
-            .Content.ReadFromJsonAsync<WildBattleResultDto>())!;
-        Assert.True(lost.PowerChange < 0);
-        Assert.Equal(PowerBattles.DefeatSteps, lost.Monster.CrystalStepsLeft);
-        Assert.Equal(-lost.PowerChange, lost.Monster.CrystalPower);
-
-        // A crystal can't battle until it's walked back.
-        HttpResponseMessage again = await p.Http.PostAsJsonAsync($"/api/walking/monsters/{monster}/wild", new WildBattleRequest(true, 100));
-        Assert.Equal(HttpStatusCode.Conflict, again.StatusCode);
-    }
-
     // ------------------------------------------------------------------ ranked: bites and crystals
 
     private async Task<(Player P, Guid Monster)> RankedPlayer()

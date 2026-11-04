@@ -10,6 +10,7 @@ using GameServices.Api.Infrastructure;
 using GameServices.Api.Online;
 using GameServices.Api.Saves;
 using GameServices.Api.Walking;
+using GameServices.Api.Walking.Progress;
 using Microsoft.EntityFrameworkCore;
 using Scalar.AspNetCore;
 
@@ -40,6 +41,9 @@ using (var scope = app.Services.CreateScope())
     startupDb.Database.Migrate();
     // Monsters made under older rules (e.g. seven rarities, before there were five) brought up to date, once.
     GameServices.Api.Walking.Monsters.MonsterRulesUpgrade.Run(startupDb);
+    // The list of words to block: filled the first time, then read from the database.
+    await GameServices.Api.Moderation.BlockedWords.SeedIfEmptyAsync(startupDb);
+    await GameServices.Api.Moderation.BlockedWords.RefreshAsync(startupDb);
 }
 
 // Admin commands (run on the server machine): dotnet run -- reset-password SomeUser
@@ -48,13 +52,38 @@ if (await AdminCommands.TryRun(app.Services, args))
     return;
 }
 
+// ...reading reports: dotnet run -- reports
+if (await GameServices.Api.Moderation.ReportAdmin.TryRun(app.Services, args))
+{
+    return;
+}
+
+// ...checking every Glimmer adds up: dotnet run -- audit
+if (await GameServices.Api.Walking.Wallet.WalletAudit.TryRunAdmin(app.Services, args))
+{
+    return;
+}
+
+// ...reading what a walker has done: dotnet run -- player SomeName 7
+if (await GameServices.Api.Walking.Progress.ActivityLog.TryRunAdmin(app.Services, args))
+{
+    return;
+}
+
+// ...and the list of blocked words: dotnet run -- words
+if (await GameServices.Api.Moderation.BlockedWords.TryRunAdmin(app.Services, args))
+{
+    return;
+}
+
 // ---- The request pipeline: every request passes through these, in order ----
 app.UseExceptionHandler();      // turn unexpected crashes into a clean 500 instead of leaking details
 app.UseStatusCodePages();
-app.UseRateLimiter();           // slow down abuse
 app.UseWebSockets();            // duel sockets (/ws/duel for phones, /ws/host for the duel host)
 app.UseAuthentication();        // "who are you?"  (reads the access token)
+app.UseRateLimiter();           // slow down abuse (after authentication: each player has their own limit)
 app.UseAuthorization();         // "are you allowed?"
+app.UseActivityLog();           // writes down what each walker changed (Walking/Progress/ActivityLog)
 
 if (app.Environment.IsDevelopment())
 {
@@ -79,6 +108,8 @@ app.MapCosmeticImageEndpoints();
 app.MapProfileCardEndpoints();
 app.MapOnlineEndpoints();
 app.MapMapEndpoints();
+GameServices.Api.Moderation.ReportEndpoints.MapReportEndpoints(app);
+GameServices.Api.Legal.LegalEndpoints.MapLegalEndpoints(app);
 app.MapHub<ChatHub>("/hubs/chat");
 
 app.Run();

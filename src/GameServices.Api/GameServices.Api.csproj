@@ -21,6 +21,7 @@
   <ItemGroup>
     <Content Update="Catalog\catalog.json" CopyToOutputDirectory="PreserveNewest" />
     <Content Update="Walking\monster-catalog.json" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Legal\*.txt" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

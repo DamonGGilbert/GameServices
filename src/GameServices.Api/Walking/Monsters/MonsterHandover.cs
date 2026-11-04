@@ -1,4 +1,6 @@
 using GameServices.Api.Data;
+using GameServices.Api.Walking.Bazaar;
+using GameServices.Api.Walking.Progress;
 using Microsoft.EntityFrameworkCore;
 
 namespace GameServices.Api.Walking.Monsters;
@@ -25,7 +27,21 @@ public static class MonsterHandover
         monster.TradeCount++;
         monster.ArrivedFromUserId = oldOwner;
         monster.Seen = false;   // so its new walker gets a welcome reveal
+        monster.RestUntilSteps = 0;   // a snooze is counted in its old walker's steps
+        monster.BondSteps = 0;        // and a bond is with one walker
+        monster.TrainingSteps = 0;    // and so is today's training
+        monster.TrainingDay = "";
 
+        // It counts as a trade for them both (the Trader isn't a walker, and buying and selling there isn't trading).
+        if (oldOwner != Trader.Id && newOwner != Trader.Id) await Explorer.OnTradeAsync(db, oldOwner, newOwner, monster, now, cancel);
+
+        await LetGo(db, monster, now, exceptOffer, exceptSwap, exceptListing, cancel);
+    }
+
+    /// <summary>Everything waiting on a monster that's leaving its walker ends, and any Glimmer held goes back to its owner.</summary>
+    public static async Task LetGo(AppDbContext db, WalkingMonster monster, DateTime now, Guid? exceptOffer, Guid? exceptSwap,
+        Guid? exceptListing, CancellationToken cancel)
+    {
         db.RankedEntries.RemoveRange(await db.RankedEntries.Where(e => e.MonsterId == monster.Id).ToListAsync(cancel));
 
         List<MonsterOffer> offers = await db.MonsterOffers

@@ -16,6 +16,7 @@ public readonly record struct MonsterBattleStats(int Power, int Guard, int Trick
 ///   * Cards/MonsterCardInstance.cs        - Wits (from the "wits" stream) and the card's numbers: training points
 ///     added, then everything grown by level
 ///   * Progression/ProgressionConfig.cs    - ScaleStat: value x (1 + (level - 1) x growth)
+///   * Monsters/ElementClans.cs            - the clan's lean, before training and level
 /// Floats on purpose, like the game: the same sums in the same order give the same numbers.
 /// </summary>
 public static class MonsterStats
@@ -48,6 +49,13 @@ public static class MonsterStats
         // Wits: around the average of the other three.
         var witsRng = new DeterministicRandom(SeedUtility.Derive(seed, "wits"));
         int wits = Math.Max(1, (int)Math.Round((power + guard + tricks) / 3f * witsRng.Range(0.75f, 1.25f)));
+
+        // Each clan's way of fighting moves the numbers a little (Clans).
+        Clan clan = Clans.Of(species.Element, seed);
+        power = Clans.LeanPower(power, clan);
+        guard = Clans.LeanGuard(guard, clan);
+        tricks = Clans.LeanTricks(tricks, clan);
+        wits = Clans.LeanWits(wits, clan);
 
         int lv = Math.Clamp(level, 1, 100);
         float growth = catalog.StatGrowthPerLevel;

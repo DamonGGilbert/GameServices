@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using GameServices.Api.Data;
 using GameServices.Api.Social;
+using GameServices.Api.Walking.Progress;
 using Microsoft.EntityFrameworkCore;
 
 namespace GameServices.Api.Walking.Monsters;
@@ -10,20 +11,20 @@ public record WalkingMonsterDto(Guid Id, string SpeciesId, long Seed, int Rarity
     int Level, int Experience, int TrainedPower, int TrainedGuard, int TrainedTricks, int TrainedWits, int TrainingSteps,
     string? ArrivedFrom, string Nickname = "",
     int AbsorbedPower = 0, int AbsorbedGuard = 0, int AbsorbedTricks = 0, int AbsorbedWits = 0, int CrystalPower = 0, int CrystalSteps = 0, int CrystalStepsLeft = 0,
-    string CardStyle = "");
+    string CardStyle = "", long BondSteps = 0, int StepsToWake = 0, string TrainingDay = "");
 
-public record MonsterProgressDto(Guid Id, int Level, int Experience, int TrainedPower, int TrainedGuard, int TrainedTricks, int TrainedWits, int TrainingSteps);
+/// <summary>A starter's progress from before signing in, taken once. Everything else about a monster's growth is the server's.</summary>
+public record MonsterProgressDto(Guid Id, int Level, int Experience, int TrainedPower, int TrainedGuard, int TrainedTricks, int TrainedWits, int TrainingSteps, long BondSteps = 0);
 
-/// <summary>The game's view of its monsters' progress, which one is the companion, and how many monster slots it has earned.</summary>
-public record ProgressRequest(Guid? CompanionId, List<MonsterProgressDto> Monsters, int? Slots = null, string? Title = null);
+/// <summary>The choices that are yours: which monster is your companion, what it trains, and the title you wear (if you've earned it).</summary>
+public record ProgressRequest(Guid? CompanionId, List<MonsterProgressDto>? Monsters = null, string? Title = null, int? Focus = null);
 
 /// <summary>
 /// THE WALKING GAME'S MONSTERS, made on the server.
 ///
 ///   GET  /api/walking/monsters            my monsters (a first-timer is given the starter companion here)
 ///   POST /api/walking/monsters/{id}/seen  I've watched its reveal - don't show it as new again
-///   PUT  /api/walking/monsters/progress   the game's levels and training for my monsters, and my companion
-///                                         (kept so a monster's progress goes with it to a new home)
+///   PUT  /api/walking/monsters/progress   my companion, what it trains and the title I wear
 ///
 /// New monsters are never asked for: they're found while walking, when a step report earns a lucky chance
 /// (see MonsterFinder and ReportSteps). The server stores what it rolled - species, rarity, seed, potential and a
@@ -31,13 +32,15 @@ public record ProgressRequest(Guid? CompanionId, List<MonsterProgressDto> Monste
 /// </summary>
 public static class MonsterEndpoints
 {
+    /// <summary>The most training a starter can bring from before signing in.</summary>
+    public const int MostGuestTraining = 10;
+
     public static RouteGroupBuilder MapWalkingMonsterEndpoints(this RouteGroupBuilder group)
     {
         group.MapGet("/monsters", Mine);
         group.MapMonsterNameEndpoints();
         group.MapPost("/monsters/{monsterId:guid}/seen", MarkSeen);
         group.MapPut("/monsters/progress", SaveProgress);
-        group.MapPost("/monsters/{monsterId:guid}/wild", WildBattles.Report);
         return group;
     }
 
@@ -46,11 +49,8 @@ public static class MonsterEndpoints
         if (!SocialEndpoints.TryGetUserId(principal, out Guid me)) return Results.Unauthorized();
 
         // Every walker has a companion: the first visit brings the starter.
-        if (!await db.WalkingMonsters.AnyAsync(m => m.OwnerId == me, cancel))
+        if (await GiveStarterIfNewAsync(db, me, finder, cancel))
         {
-            (string species, int tier, long seed, int potential) = finder.RollStarter();
-            await Add(db, me, species, tier, seed, potential, finder.Catalog.RulesVersion, "starter", null, DateTime.UtcNow.ToString("yyyy-MM-dd"), cancel);
-
             try
             {
                 await db.SaveChangesAsync(cancel);
@@ -67,52 +67,64 @@ public static class MonsterEndpoints
         List<Guid> givers = mine.Where(m => m.ArrivedFromUserId != null).Select(m => m.ArrivedFromUserId!.Value).Distinct().ToList();
         Dictionary<Guid, string> names = await db.Users.Where(u => givers.Contains(u.Id)).ToDictionaryAsync(u => u.Id, u => u.Username, cancel);
 
-        return Results.Ok(mine.Select(m => ToDto(m, m.ArrivedFromUserId != null && names.TryGetValue(m.ArrivedFromUserId.Value, out string? n) ? n : null)).ToList());
+        long walked = await db.WalkingProfiles.AsNoTracking().Where(p => p.UserId == me).Select(p => p.LifetimeSteps).FirstOrDefaultAsync(cancel);
+        return Results.Ok(mine.Select(m => ToDto(m, m.ArrivedFromUserId != null && names.TryGetValue(m.ArrivedFromUserId.Value, out string? n) ? n : null, walked)).ToList());
     }
 
-    public static WalkingMonsterDto ToDto(WalkingMonster m, string? arrivedFrom) =>
+    /// <summary>A walker with no monsters is given the starter (saved with whatever else is being saved). True if they were.</summary>
+    public static async Task<bool> GiveStarterIfNewAsync(AppDbContext db, Guid me, MonsterFinder finder, CancellationToken cancel)
+    {
+        if (await db.WalkingMonsters.AnyAsync(m => m.OwnerId == me, cancel) || db.ChangeTracker.Entries<WalkingMonster>().Any(e => e.State == EntityState.Added && e.Entity.OwnerId == me)) return false;
+
+        (string species, int tier, long seed, int potential) = finder.RollStarter();
+        await Add(db, me, species, tier, seed, potential, finder.Catalog.RulesVersion, "starter", null, DateTime.UtcNow.ToString("yyyy-MM-dd"), cancel);
+        return true;
+    }
+
+    /// <param name="walkerSteps">Its walker's lifetime steps, to say how far it is from waking up from a snooze.</param>
+    public static WalkingMonsterDto ToDto(WalkingMonster m, string? arrivedFrom, long walkerSteps = long.MaxValue) =>
         new(m.Id, m.SpeciesId, m.Seed, m.RarityTier, m.Potential, m.RulesVersion, m.Serial, m.Source, m.BiomeId, m.FoundUtc, m.Seen,
             m.Level, m.Experience, m.TrainedPower, m.TrainedGuard, m.TrainedTricks, m.TrainedWits, m.TrainingSteps, arrivedFrom, m.Nickname ?? "",
-            m.AbsorbedPower, m.AbsorbedGuard, m.AbsorbedTricks, m.AbsorbedWits, m.CrystalPower, m.CrystalSteps, m.CrystalStepsLeft, m.CardStyle ?? "");
+            m.AbsorbedPower, m.AbsorbedGuard, m.AbsorbedTricks, m.AbsorbedWits, m.CrystalPower, m.CrystalSteps, m.CrystalStepsLeft, m.CardStyle ?? "",
+            m.BondSteps, (int)Math.Clamp(m.RestUntilSteps - walkerSteps, 0, int.MaxValue), m.TrainingDay ?? "");
 
-    // The game sends its monsters' levels and training. The server can't watch every step of a battle or a walk, so it
-    // keeps what's believable: no level above 100, never more training than the monster's potential allows.
+    // Your choices. A monster's levels, training and steps together are all worked out here (MonsterLevels, Companions); the
+    // one thing taken from the phone is a starter's progress from before signing in, once, within limits.
     private static async Task<IResult> SaveProgress(ProgressRequest request, ClaimsPrincipal principal, AppDbContext db, CancellationToken cancel)
     {
         if (!SocialEndpoints.TryGetUserId(principal, out Guid me)) return Results.Unauthorized();
 
         Dictionary<Guid, WalkingMonster> mine = await db.WalkingMonsters.Where(m => m.OwnerId == me).ToDictionaryAsync(m => m.Id, cancel);
+        string today = DateTime.UtcNow.ToString("yyyy-MM-dd");
+        WalkingProfile profile = await WalkingEndpoints.GetOrCreateProfile(db, me, cancel);
 
         foreach (MonsterProgressDto p in request?.Monsters ?? new List<MonsterProgressDto>())
         {
-            if (!mine.TryGetValue(p.Id, out WalkingMonster? m)) continue;
-            int maxPoints = 10 + (int)Math.Round(m.Potential * 0.4);
-            m.Level = Math.Clamp(p.Level, 1, 100);
-            m.Experience = Math.Max(0, p.Experience);
+            if (profile.GuestProgressTaken || !mine.TryGetValue(p.Id, out WalkingMonster? m) || m.Source != "starter") continue;
 
-            // Training is one point a day, so a monster can't have more points than days since it was found (plus
-            // today). The server's own clock decides that, so changing the phone's date doesn't help. A claim that
-            // breaks the rule is simply not taken - the points saved before stay as they were.
-            int before = m.TrainedPower + m.TrainedGuard + m.TrainedTricks + m.TrainedWits;
+            MonsterLevels.TakeGuestProgress(m, p.Level, p.Experience, today);
+            m.BondSteps = Math.Max(m.BondSteps, Math.Clamp(p.BondSteps, 0, ProgressEndpoints.MostStartingSteps));
+
             int claimed = Math.Max(0, p.TrainedPower) + Math.Max(0, p.TrainedGuard) + Math.Max(0, p.TrainedTricks) + Math.Max(0, p.TrainedWits);
-            int daysOwned = (int)(DateTime.UtcNow - m.FoundUtc).TotalDays + 1;
-            if (claimed <= before || claimed <= Math.Min(maxPoints, daysOwned))
+            if (claimed <= Math.Min(Explorer.MostTraining(m), MostGuestTraining))
             {
                 m.TrainedPower = Math.Max(0, p.TrainedPower);
                 m.TrainedGuard = Math.Max(0, p.TrainedGuard);
                 m.TrainedTricks = Math.Max(0, p.TrainedTricks);
                 m.TrainedWits = Math.Max(0, p.TrainedWits);
             }
-            if (m.TrainedPower + m.TrainedGuard + m.TrainedTricks + m.TrainedWits > maxPoints)
-            {
-                m.TrainedPower = m.TrainedGuard = m.TrainedTricks = m.TrainedWits = 0;   // more than is possible: not believed
-            }
-            m.TrainingSteps = Math.Clamp(p.TrainingSteps, 0, 20000);
         }
 
-        WalkingProfile profile = await WalkingEndpoints.GetOrCreateProfile(db, me, cancel);
-        if (request?.Slots is int slots) profile.MonsterSlots = Math.Clamp(slots, MonsterSlots.Starting, MonsterSlots.Most);
-        if (request?.Title != null) profile.Title = Explorers.CleanTitle(request.Title);
+        if (request?.Monsters?.Count > 0) profile.GuestProgressTaken = true;
+        if (request?.Focus is int focus) profile.TrainingFocus = Math.Clamp(focus, 0, 4);
+
+        // A title has to be one you've earned. Anything else is ignored, and what you were wearing stays.
+        if (request?.Title != null)
+        {
+            string title = Explorers.CleanTitle(request.Title);
+            if (request.Title.Length == 0 || Explorer.HasItem(profile.Titles, title)) profile.Title = title;
+        }
+
         if (request?.CompanionId is Guid companion && mine.ContainsKey(companion))
         {
             profile.CompanionMonsterId = companion;
@@ -166,9 +178,12 @@ public static class MonsterEndpoints
     }
 
     // A new monster with the next serial number for its species (the counter is saved with it).
-    public static async Task Add(AppDbContext db, Guid owner, string speciesId, int tier, long seed, int potential, int rulesVersion,
+    public static async Task<WalkingMonster> Add(AppDbContext db, Guid owner, string speciesId, int tier, long seed, int potential, int rulesVersion,
         string source, string? biomeId, string day, CancellationToken cancel)
     {
+        WalkingProfile profile = db.WalkingProfiles.Local.FirstOrDefault(p => p.UserId == owner) ?? await WalkingEndpoints.GetOrCreateProfile(db, owner, cancel);
+        Explorer.OnMonsterArrived(db, profile, speciesId, tier, source);
+
         MonsterSpeciesCount? count = db.MonsterSpeciesCounts.Local.FirstOrDefault(c => c.SpeciesId == speciesId)
                                     ?? await db.MonsterSpeciesCounts.FirstOrDefaultAsync(c => c.SpeciesId == speciesId, cancel);
         if (count == null)
@@ -178,7 +193,7 @@ public static class MonsterEndpoints
         }
 
         count.Found++;
-        db.WalkingMonsters.Add(new WalkingMonster
+        WalkingMonster monster = new()
         {
             OwnerId = owner,
             SpeciesId = speciesId,
@@ -192,6 +207,8 @@ public static class MonsterEndpoints
             FoundDay = day,
             FoundUtc = DateTime.UtcNow,
             Seen = source == "starter",   // the starter isn't a surprise
-        });
+        };
+        db.WalkingMonsters.Add(monster);
+        return monster;
     }
 }

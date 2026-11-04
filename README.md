@@ -211,6 +211,52 @@ Map data © OpenStreetMap contributors, available under the Open Database Licenc
 - JWT signing key is a secret: a dev-only key in `appsettings.Development.json`, and **must** come from the
   `Jwt__Key` environment variable in production.
 
+## Player safety
+
+- **Age check:** Steplings sign-ups must send a birth month and year. The server refuses anyone under `Accounts:MinimumAge` (default 13) and keeps only when the check passed, never the birthday. The game has the same number in `Core/AgeRules.cs`, and the privacy policy says it in words.
+- **Deleting an account:** `POST /api/auth/delete-account` with the password. Other players get back any Glimmer held on it (`Auth/AccountDeletion.cs`).
+- **Reports:** `POST /api/reports`. Read them on the server machine (in Docker, start with `docker compose exec api`):
+
+```
+dotnet GameServices.Api.dll reports
+dotnet GameServices.Api.dll close-report abc123 Spoke to them
+dotnet GameServices.Api.dll suspend SomeUser 7
+dotnet GameServices.Api.dll unsuspend SomeUser
+```
+
+- **Web pages for the app stores:** `/privacy` and `/delete-account` come from `Legal/*.txt`. The game keeps its own copy of the policy in `Assets/_Game/Resources/Legal`, so change both together.
+- **Blocked words:** the list is in the database (`BlockedWord`), filled from `BlockedWordSeed` the first time the server starts, and a running server picks up changes within a minute. It blocks single words and combinations of words that are only a problem together ("kill yourself", "where do you live"). A combination still counts with one word in between ("go and die").
+
+```
+dotnet GameServices.Api.dll words                          # the whole list
+dotnet GameServices.Api.dll block-word somethingrude       # caught anywhere, even inside other words
+dotnet GameServices.Api.dll block-whole rude               # only on its own (or with an ending like "rudes")
+dotnet GameServices.Api.dll block-phrase go away forever   # only these words together, in this order
+dotnet GameServices.Api.dll allow-word scunthorpe          # an innocent word containing a blocked one
+dotnet GameServices.Api.dll unblock somethingrude
+```
+
+## Battles and the books
+
+- **The server runs every battle against a wild monster or a trainer** (`Walking/Battles/BattleEndpoints.cs`). `POST /api/walking/battles` picks the opponent and fixes a secret seed, and `POST /api/walking/battles/{id}/fight` takes your strategy, decides the fight and pays out. The phone gets the seed only afterwards, to replay the fight. Offline practice for players without an account earns nothing here.
+- **The server hands out the growth:** experience for battles and for steps with a companion (at most `MonsterLevels.MaxXpPerDay` a day), Trail Tonics, crystals and snoozes. Battle Glimmer stops at 300 a day. The phone's only claim on a level is a starter's progress from before signing in, once.
+- **The numbers come from Unity:** trainers and what battles pay are in `Walking/monster-catalog.json`, written by Wanderkin > Export Monster Catalog. The fight rules are in both `Ranked/DuelRules.cs` and the game's `Battles/DuelRules.cs`, and each side's tests check the same numbers.
+- **Every Glimmer is accounted for.** Only `WalkingWallet.Change` touches a balance, and it writes a ledger line every time. To check the books on the server machine:
+
+```
+dotnet GameServices.Api.dll audit
+```
+
+It checks that each wallet equals its ledger and each line follows on from the one before, plays every battle again from its seed (they're kept for 90 days), and shows how much Glimmer exists, where it came from and where it went.
+
+- **The six clans** (`Monsters/Clans.cs`, and the game's `Monsters/ElementClans.cs`): Fire, Water, Earth, Wind, Light and Darkness. A monster's clan comes from its seed, so it isn't stored anywhere and the phone always agrees. A clan it beats gives it +15% to every stat in a battle, and a clan that beats it -10%, already included in the stats stored with each fight. Each clan also leans towards certain stats on its card (`MonsterStats`).
+- **Choosing a clan at sign-up is groundwork only.** `RegisterRequest.Clan` makes the starter in that clan straight away, and leaving it blank works as before. The game doesn't ask yet (`ClanChooser.AskAtSignUp` in the game), and the account doesn't remember a clan.
+- **An explorer's progress is the server's** (`Walking/Progress`): level and experience (which bring monster slots), milestones, daily quests, achievements, medals, the daily goal and streak, training and bond. `GET /api/walking/progress` says where everything's got to, `POST .../progress/claim` and `claim-all` collect rewards. The rules are the game's own data, exported into `monster-catalog.json`. A phone can't add Glimmer: `POST /wallet/sync` only takes its balance the first time, and `POST .../progress/start` takes what it has from before signing in, once, within limits, and none of that can pay anything.
+- **Finds on the map** (`Walking/Progress/Discoveries.cs`, `POST /api/walking/investigate`): 300, 800, 1,500, 3,000, 4,500, 6,000 and 10,000 steps in a day bring one each, so most days bring three to seven. The server decides what's inside, at odds it also sends to the game for players to see. Never more than 15 finds between Steplings, and the seventh of the day is the Golden Cache. Where anyone is never comes here.
+- **The activity log** (`Walking/Progress/ActivityLog.cs`) records what happens on each account and every request that changes something, including refused ones. It never holds passwords, emails, messages or where anyone is, it's kept for 90 days, and it goes when an account is deleted. To read a walker's last 7 days with their Glimmer: `dotnet GameServices.Api.dll player SomeName 7`. The privacy policy describes this, so change them together.
+
+**Still decided on the phone:** quests, medals, player level and slots, and up to 1,500 Glimmer a day for milestones, quests and other rewards (`WalkingWallet.PhoneDailyCap`). That's more than a very good day earns (about 1,040), so a player keeps what the game told them they collected, but a hacked phone can claim that much too. Paying milestones from the server (it already knows the steps) would let this come right down. A monster's training is checked against its potential and one point a day.
+
 ## Project layout
 
 ```

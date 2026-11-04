@@ -1,9 +1,11 @@
 using System.Security.Claims;
 using GameServices.Api.Chat;
 using GameServices.Api.Data;
+using GameServices.Api.Infrastructure;
 using GameServices.Api.Social;
 using GameServices.Api.Walking.Bazaar;
 using GameServices.Api.Walking.Monsters;
+using GameServices.Api.Walking.Progress;
 using GameServices.Api.Walking.Routes;
 using GameServices.Api.Walking.Wallet;
 using Microsoft.AspNetCore.SignalR;
@@ -13,11 +15,13 @@ namespace GameServices.Api.Walking;
 
 /// <summary>Biome: the kind of place the walker is mostly in ("park", "coastal"...), so a find can suit it. Optional.</summary>
 /// <summary>ShareArea + Lat/Lon (rounded by the phone): only sent when the walker has "Walk with friends" switched on.</summary>
-public record StepReportRequest(string Day, int Steps, int UtcOffsetMinutes, string? Biome = null, bool ShareArea = false, double Lat = 0, double Lon = 0);
+/// <summary>Metres, AreasToday: the phone's totals for the day. NewAreas: places never visited before, since its last report. Counts only.</summary>
+public record StepReportRequest(string Day, int Steps, int UtcOffsetMinutes, string? Biome = null, bool ShareArea = false, double Lat = 0, double Lon = 0,
+    double Metres = 0, int AreasToday = 0, int NewAreas = 0);
 
-/// <summary>NewFinds: monsters found on this walk (fetch them from /api/walking/monsters and reveal them).</summary>
+/// <summary>NewFinds: monsters found on this walk (fetch them from /api/walking/monsters and reveal them). Notices: things to tell the walker.</summary>
 public record StepReportResult(int AcceptedToday, int Added, int Rejected, long LifetimeSteps, bool Flagged, string Message, int NewFinds = 0,
-    List<string>? WalkingWith = null, int TogetherBonus = 0, int TogetherDays = 0);
+    List<string>? WalkingWith = null, int TogetherBonus = 0, int TogetherDays = 0, List<string>? Notices = null);
 
 public record WalkingMeDto(int Today, int Week, long Lifetime, bool ShareSteps, int RacesWon, int RacesLost);
 
@@ -74,7 +78,7 @@ public static class WalkingEndpoints
 
     public static IEndpointRouteBuilder MapWalkingEndpoints(this IEndpointRouteBuilder app)
     {
-        RouteGroupBuilder group = app.MapGroup("/api/walking").WithTags("Walking").RequireAuthorization();
+        RouteGroupBuilder group = app.MapGroup("/api/walking").WithTags("Walking").RequireAuthorization().RetriesOnConflict();
 
         group.MapPost("/steps", ReportSteps);
         group.MapGet("/me", Me);
@@ -97,6 +101,7 @@ public static class WalkingEndpoints
         group.MapMonsterSwapEndpoints();
         group.MapMonsterMarketEndpoints();
         group.MapWalkingWalletEndpoints();
+        group.MapProgressEndpoints();   // levels, milestones, quests, medals, streaks and finds on the map (Walking/Progress)
         GameServices.Api.Walking.Ranked.RankedEndpoints.MapRankedEndpoints(group);
 
         // Safe walking loops with bonus rewards (Walking/Routes).
@@ -104,6 +109,7 @@ public static class WalkingEndpoints
         group.MapPublicProfileEndpoints();
         group.MapExplorerEndpoints();   // Players: walkers to meet without walking (Explorers.cs)
         group.MapBazaarEndpoints();     // the Bazaar: Juniper the Trader, the Monster Maker and the Tonic Stand (Bazaar/)
+        Battles.BattleEndpoints.MapBattleEndpoints(group);   // battles against wild monsters and trainers, run here (Battles/)
 
         group.MapGet("/races", MyRaces);
         group.MapPost("/races", Challenge);
@@ -137,7 +143,8 @@ public static class WalkingEndpoints
 
         string day = request.Day.Trim();
         WalkingDay? row = await db.WalkingDays.FirstOrDefaultAsync(d => d.UserId == me && d.Day == day, cancel);
-        DateTime? dayLastReported = row?.UpdatedUtc;
+        // (Only a report with steps counts as a report: opening the game makes the day's row too, before any have come in.)
+        DateTime? dayLastReported = row is { Steps: > 0 } ? row.UpdatedUtc : null;
 
         if (row == null)
         {
@@ -158,6 +165,7 @@ public static class WalkingEndpoints
         if (verdict.Flagged)
         {
             profile.FlaggedReports++;
+            ActivityLog.Add(db, me, "steps-flagged", day + ": asked for " + request.Steps + " steps, " + verdict.Rejected + " refused");
         }
 
         // Walking earns Glimmer (1 per 100 steps), and brings crystals (from lost power battles) back to life...
@@ -170,15 +178,24 @@ public static class WalkingEndpoints
 
         // Walking with a friend right now? +25% Glimmer on these steps (only for today's walking, not finishing yesterday).
         bool isToday = StepRules.DayStartUtc(day, request.UtcOffsetMinutes, now) is DateTime start && now < start.AddDays(1);
+
+        // Experience, the daily goal and streak, how far (the phone's measure, as far as these steps can explain it).
+        if (isToday) profile.UtcOffsetMinutes = request.UtcOffsetMinutes;
+        var notices = new List<string>();
+        await Explorer.OnStepsAsync(db, finder, profile, row, verdict.Added, request.Metres, request.AreasToday, request.NewAreas, now, notices, cancel);
+
         TogetherResult together = await WalkTogether.ApplyAsync(db, profile,
             request.ShareArea && isToday ? request.Lat : null, request.ShareArea && isToday ? request.Lon : null,
             isToday ? verdict.Added : 0, day, now, cancel);
+
+        // Your companion grows as you walk together, and walking earns Trail Tonics.
+        await Battles.BattleEndpoints.OnStepsAsync(db, finder.Catalog, profile, verdict.Added, verdict.AcceptedToday, isToday, now, notices, cancel);
 
         try
         {
             await db.SaveChangesAsync(cancel);
         }
-        catch (DbUpdateException)
+        catch (DbUpdateException ex) when (ex is not DbUpdateConcurrencyException)
         {
             // Two reports raced for the same new day: the other one won. Nothing is lost; the next report catches up.
             return Results.Problem("Steps were reported a moment ago. Try again shortly.", statusCode: StatusCodes.Status429TooManyRequests);
@@ -189,7 +206,7 @@ public static class WalkingEndpoints
             : "";
 
         return Results.Ok(new StepReportResult(verdict.AcceptedToday, verdict.Added, verdict.Rejected, profile.LifetimeSteps, verdict.Flagged, message, newFinds,
-            together.WalkingWith, together.Bonus, together.DaysTotal));
+            together.WalkingWith, together.Bonus, together.DaysTotal, notices));
     }
 
     private static async Task<IResult> Me(ClaimsPrincipal principal, AppDbContext db, CancellationToken cancel)

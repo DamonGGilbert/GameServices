@@ -63,7 +63,8 @@ public class WalkingExplorerTests : IClassFixture<ApiFactory>
     public async Task ActiveWalkers_ShowTheirTitleAndCompanion_ButNeverMe()
     {
         Player me = await NewPlayer(), other = await NewPlayer();
-        await other.Http.PutAsJsonAsync("/api/walking/monsters/progress", new ProgressRequest(null, new List<MonsterProgressDto>(), null, "Gold Walker"));
+        await WithDb(async db => (await db.WalkingProfiles.FirstAsync(x => x.UserId == other.Id)).Titles = "Gold Walker");
+        await other.Http.PutAsJsonAsync("/api/walking/monsters/progress", new ProgressRequest(null, null, "Gold Walker"));
 
         ExplorerListDto list = await Explorers(me, "active");
         ExplorerDto them = Assert.Single(list.Explorers, e => e.UserId == other.Id);

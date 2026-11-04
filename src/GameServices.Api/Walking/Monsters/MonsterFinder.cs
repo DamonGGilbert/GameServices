@@ -56,10 +56,16 @@ public sealed class MonsterFinder
     }
 
     /// <summary>The starter companion: always the starter species, always Common, with its own fresh seed.</summary>
-    public (string SpeciesId, int RarityTier, long Seed, int Potential) RollStarter()
+    /// <param name="clan">The clan it should be, if one was chosen: seeds are tried until one gives that clan.</param>
+    public (string SpeciesId, int RarityTier, long Seed, int Potential) RollStarter(Clan? clan = null)
     {
-        long seed = RandomNumberGenerator.GetInt32(int.MinValue, int.MaxValue) * 4294967296L + (uint)RandomNumberGenerator.GetInt32(int.MinValue, int.MaxValue);
         string species = catalog.FindSpecies(catalog.StarterSpeciesId)?.Id ?? catalog.Species[0].Id;
+        long seed;
+        do
+        {
+            seed = RandomNumberGenerator.GetInt32(int.MinValue, int.MaxValue) * 4294967296L + (uint)RandomNumberGenerator.GetInt32(int.MinValue, int.MaxValue);
+        }
+        while (clan != null && Clans.Of(catalog, species, seed) != clan);
         return (species, 0, seed, MonsterPotential.For(seed, 0));
     }
 

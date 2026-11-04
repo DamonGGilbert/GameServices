@@ -1,3 +1,4 @@
+using GameServices.Api.Data;
 using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -5,10 +6,10 @@ using System.Text.RegularExpressions;
 namespace GameServices.Api.Moderation;
 
 /// <summary>
-/// THE WORD FILTER: keeps swearing, slurs and hate out of names and chat.
+/// THE WORD FILTER: keeps swearing, slurs and hate out of names and chat, using the list in the database (BlockedWords).
 ///
-/// The SAME code lives in the game (Assets/_Game/Scripts/Core/ContentFilter.cs) so the phone can say "try another
-/// name" straight away - but only the server's word counts. Change both together.
+/// The game has its own copy of this code and a built-in list (Assets/_Game/Scripts/Core/ContentFilter.cs), so the phone
+/// can say "try another name" straight away - but only the server's word counts.
 ///
 /// How it sees through tricks:
 ///   * look-alike symbols:  $h1t, @ss, f*ck -> shit, ass (the * is left alone: self-censored is fine)
@@ -17,68 +18,140 @@ namespace GameServices.Api.Moderation;
 ///   * accents:             fück
 ///   * names run together:  BigAssDog, xXshitXx, Fu_Ck (names are also split at capitals and underscores)
 ///
-/// Two kinds of word, so innocent words aren't caught (the "Scunthorpe problem"):
-///   * ANYWHERE words are caught even inside other words (fuck, shit, slurs...) - with a short list of innocent
-///     words that contain them (Scunthorpe, snigger...).
-///   * WHOLE words only count on their own, maybe with an ending like -s or -ing (ass, but not class or
-///     assassin; rape, but not grape; spic, but not spicy).
-///
 /// Chat is CENSORED (the bad word becomes ****); names are REFUSED.
-///
-/// NOTE: this list is offensive on purpose - it's what we keep out. Keep it lower case, letters only.
 /// </summary>
 public static class ContentFilter
 {
-    private static readonly string[] AnywhereWords =
-    {
-        "fuck", "shit", "cunt", "wank", "bitch", "bastard", "whore", "slut", "piss", "bollock", "twat",
-        "asshole", "arsehole", "dickhead", "bellend", "motherfuck", "jizz", "dildo", "porn",
-        "nigger", "nigga", "faggot", "wetback", "hitler", "killyourself",
-    };
+    /// <summary>The filter in use: the built-in list until the database's has loaded.</summary>
+    public static WordFilter Current { get; private set; } = new WordFilter(
+        BlockedWordSeed.Of(BlockedWordKind.Anywhere), BlockedWordSeed.Of(BlockedWordKind.Whole),
+        BlockedWordSeed.Of(BlockedWordKind.Allowed), BlockedWordSeed.Of(BlockedWordKind.Combination));
 
-    private static readonly string[] WholeWords =
-    {
-        "ass", "arse", "dick", "cock", "prick", "knob", "tits", "cum", "shag", "fag", "retard", "rape", "rapist",
-        "pedo", "paedo", "nonce", "nazi", "heil", "kkk", "kike", "chink", "spic", "coon", "gook", "paki", "tranny",
-        "dyke", "negro", "kys", "sieg",
-    };
+    public static void Use(WordFilter filter) => Current = filter;
 
-    // Innocent words that happen to contain an ANYWHERE word.
-    private static readonly string[] Allowed =
-    {
-        "scunthorpe", "snigger", "sniggers", "sniggered", "sniggering", "shitake", "shiitake", "pissarro", "cockburn",
-    };
+    /// <summary>True when the text has nothing the filter would hide.</summary>
+    public static bool IsClean(string? text) => Current.IsClean(text);
 
+    /// <summary>Chat: every bad word becomes asterisks (same length, so the message still reads naturally).</summary>
+    public static string Censor(string? text) => Current.Censor(text);
+
+    /// <summary>Names (players, monsters, guilds): refused if anything in them is bad - even run together.</summary>
+    public static bool IsCleanName(string? name) => Current.IsCleanName(name);
+}
+
+/// <summary>A word filter built from one list of words (see BlockedWords for the kinds).</summary>
+public sealed class WordFilter
+{
     // Endings a WHOLE word may have and still count: ass -> asses, retard -> retarded.
     private const string Endings = "(s|es|ed|er|ers|ing)?";
 
-    private static readonly Regex AnywhereRule = new Regex(string.Join("|", Array.ConvertAll(AnywhereWords, Stretchy)), RegexOptions.Compiled);
-    private static readonly Regex WholeRule = new Regex("^(" + string.Join("|", Array.ConvertAll(WholeWords, Stretchy)) + ")" + Endings + "$", RegexOptions.Compiled);
-    private static readonly HashSet<string> AllowedSet = new HashSet<string>(Allowed);
+    // A combination run together in one word: long ones anywhere ("killyourself"), short ones only exactly ("godie").
+    private const int LongEnoughForAnywhere = 8;
+
+    // The words of a combination may have one other word between them and still count: "go and die".
+    private const int WordsAllowedBetween = 1;
+
+    private readonly Regex anywhereRule;
+    private readonly Regex wholeRule;
+    private readonly HashSet<string> allowedSet;
+    private readonly List<Regex[]> combinations = new List<Regex[]>();
+
+    public WordFilter(IEnumerable<string> anywhere, IEnumerable<string> whole, IEnumerable<string> allowed, IEnumerable<string> combinationPhrases)
+    {
+        var anywhereWords = new List<string>(anywhere);
+        var wholeWords = new List<string>(whole);
+
+        foreach (string phrase in combinationPhrases)
+        {
+            string[] words = phrase.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            if (words.Length == 0) continue;
+            combinations.Add(Array.ConvertAll(words, w => new Regex("^" + Stretchy(w) + "$", RegexOptions.Compiled)));
+
+            string joined = string.Concat(words);
+            if (joined.Length >= LongEnoughForAnywhere) anywhereWords.Add(joined);
+            else wholeWords.Add(joined);
+        }
+
+        // (A regex with nothing in it would match everything: "(?!)" matches nothing.)
+        anywhereRule = new Regex(anywhereWords.Count > 0 ? string.Join("|", anywhereWords.ConvertAll(Stretchy)) : "(?!)", RegexOptions.Compiled);
+        wholeRule = new Regex(wholeWords.Count > 0 ? "^(" + string.Join("|", wholeWords.ConvertAll(Stretchy)) + ")" + Endings + "$" : "(?!)", RegexOptions.Compiled);
+        allowedSet = new HashSet<string>(allowed);
+    }
+
+    /// <summary>What goes in the list: plain lower-case letters, with single spaces between the words of a combination.</summary>
+    public static string TidyEntry(string text, bool keepSpaces)
+    {
+        var words = new List<string>();
+        foreach (string part in (text ?? "").Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries))
+        {
+            string word = Normalise(part);
+            if (word.Length > 0) words.Add(word);
+        }
+        return string.Join(keepSpaces ? " " : "", words);
+    }
 
     // ------------------------------------------------------------------ the three questions
 
     /// <summary>True when the text has nothing the filter would hide.</summary>
-    public static bool IsClean(string? text) => Censor(text) == (text ?? "");
+    public bool IsClean(string? text) => Censor(text) == (text ?? "");
 
     /// <summary>Chat: every bad word becomes asterisks (same length, so the message still reads naturally).</summary>
-    public static string Censor(string? text)
+    public string Censor(string? text)
     {
         if (string.IsNullOrEmpty(text)) return text ?? "";
         char[] output = text.ToCharArray();
-        foreach ((int start, int end, string word) in Words(text))
+        List<(int Start, int End, string Word)> words = Words(text);
+
+        foreach ((int start, int end, string word) in words)
         {
-            if (!IsBad(word)) continue;
-            for (int i = start; i < end; i++)
+            if (IsBad(word)) Hide(output, start, end);
+        }
+
+        // Words that are only a problem together: everything from the first to the last of them goes.
+        foreach (Regex[] combination in combinations)
+        {
+            for (int first = 0; first < words.Count; first++)
             {
-                if (!char.IsWhiteSpace(output[i])) output[i] = '*';
+                int last = MatchFrom(words, first, combination);
+                if (last >= 0) Hide(output, words[first].Start, words[last].End);
             }
         }
+
         return new string(output);
     }
 
+    private static void Hide(char[] output, int start, int end)
+    {
+        for (int i = start; i < end; i++)
+        {
+            if (!char.IsWhiteSpace(output[i])) output[i] = '*';
+        }
+    }
+
+    // Does this combination start at this word? Returns where it ends, or -1.
+    private static int MatchFrom(List<(int Start, int End, string Word)> words, int first, Regex[] combination)
+    {
+        if (!combination[0].IsMatch(words[first].Word)) return -1;
+        int at = first;
+        for (int next = 1; next < combination.Length; next++)
+        {
+            int found = -1;
+            for (int look = at + 1; look < words.Count && look <= at + 1 + WordsAllowedBetween; look++)
+            {
+                if (combination[next].IsMatch(words[look].Word))
+                {
+                    found = look;
+                    break;
+                }
+            }
+            if (found < 0) return -1;
+            at = found;
+        }
+        return at;
+    }
+
     /// <summary>Names (players, monsters, guilds): refused if anything in them is bad - even run together.</summary>
-    public static bool IsCleanName(string? name)
+    public bool IsCleanName(string? name)
     {
         if (string.IsNullOrWhiteSpace(name)) return true;
         if (!IsClean(name)) return false;
@@ -104,9 +177,7 @@ public static class ContentFilter
 
     // ------------------------------------------------------------------ inside
 
-    private static bool IsBad(string word) => !AllowedSet.Contains(word) && (InsideAnything(word) || WholeRule.IsMatch(word));
-
-    private static bool InsideAnything(string word) => !AllowedSet.Contains(word) && AnywhereRule.IsMatch(word);
+    private bool IsBad(string word) => !allowedSet.Contains(word) && (anywhereRule.IsMatch(word) || wholeRule.IsMatch(word));
 
     // "ass" -> "a+s+s+": the letters may be stretched (asssss) but not shortened (as).
     private static string Stretchy(string word)
@@ -130,7 +201,12 @@ public static class ContentFilter
             }
             int start = i;
             while (i < text.Length && IsWordChar(text[i])) i++;
-            raw.Add((start, i));
+
+            // On the end of a word these are just punctuation: "kill yourself!!" is "yourself", not "yourselfii". (A "$" or
+            // an "@" stays: "a$$" really does end in one.)
+            int end = i;
+            while (end > start + 1 && "!|+'\u2019".IndexOf(text[end - 1]) >= 0) end--;
+            raw.Add((start, end));
         }
 
         var words = new List<(int, int, string)>();
@@ -151,8 +227,8 @@ public static class ContentFilter
         return words;
     }
 
-    // Letters, digits and the symbols people swap in for letters.
-    private static bool IsWordChar(char c) => char.IsLetterOrDigit(c) || "@$!|+".IndexOf(c) >= 0;
+    // Letters, digits, the symbols people swap in for letters, and apostrophes (so "don't" reads as "dont").
+    private static bool IsWordChar(char c) => char.IsLetterOrDigit(c) || "@$!|+'\u2019".IndexOf(c) >= 0;
 
     // Lower case, accents off, look-alikes turned into letters, everything else dropped.
     private static string Normalise(string text)
