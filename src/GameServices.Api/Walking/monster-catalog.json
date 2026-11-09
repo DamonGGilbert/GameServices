@@ -139,6 +139,14 @@
       { "id": "routes", "noun": "Trailblazer", "stat": 19, "rungs": [1, 5, 10, 25, 50, 100, 200], "step": 100 },
       { "id": "together", "noun": "Buddy", "stat": 21, "rungs": [1, 5, 10, 25, 50, 100, 200], "step": 100 },
       { "id": "level", "noun": "Adventurer", "stat": 23, "rungs": [2, 5, 10, 15, 20, 30, 40, 50], "step": 10 }
+    ],
+    "frames": [
+      { "id": "frame_trailblazer", "cosmetic": "frame_trailblazer", "achievement": "", "medalRung": -1, "level": 0 },
+      { "id": "frame_explorer", "cosmetic": "", "achievement": "", "medalRung": -1, "level": 10 },
+      { "id": "frame_gold", "cosmetic": "", "achievement": "", "medalRung": 2, "level": 0 },
+      { "id": "frame_buddy", "cosmetic": "", "achievement": "better_together", "medalRung": -1, "level": 0 },
+      { "id": "frame_champion", "cosmetic": "", "achievement": "veteran", "medalRung": -1, "level": 0 },
+      { "id": "frame_legendary", "cosmetic": "", "achievement": "treasure_hunter", "medalRung": -1, "level": 0 }
     ]
   },
   "discovery": {

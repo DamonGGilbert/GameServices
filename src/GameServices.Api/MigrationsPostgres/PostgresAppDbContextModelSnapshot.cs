@@ -2272,6 +2272,11 @@ namespace GameServices.Api.MigrationsPostgres
                     b.Property<int>("Fragments")
                         .HasColumnType("integer");
 
+                    b.Property<string>("Frame")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
                     b.Property<int>("Glimmer")
                         .HasColumnType("integer");
 

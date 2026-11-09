@@ -124,6 +124,17 @@ public sealed class MonsterCatalog
         public int MedalRewardPerRung { get; init; } = 50;
         public int MedalRewardMost { get; init; } = 500;
         public List<MedalEntry> Medals { get; init; } = new();
+        public List<FrameEntry> Frames { get; init; } = new();
+    }
+
+    /// <summary>A frame for a profile picture, and what earns it (any one that's set).</summary>
+    public sealed class FrameEntry
+    {
+        public string Id { get; init; } = "";
+        public string Cosmetic { get; init; } = "";
+        public string Achievement { get; init; } = "";
+        public int MedalRung { get; init; } = -1;
+        public int Level { get; init; }
     }
 
     public sealed class WeightEntry

@@ -2259,6 +2259,11 @@ namespace GameServices.Api.Migrations
                     b.Property<int>("Fragments")
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("Frame")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
                     b.Property<int>("Glimmer")
                         .HasColumnType("INTEGER");
 

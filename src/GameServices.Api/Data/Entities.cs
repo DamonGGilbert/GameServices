@@ -685,6 +685,9 @@ public class WalkingProfile : IVersioned
     public string Titles { get; set; } = "";
     public string Badges { get; set; } = "";
     public string Cosmetics { get; set; } = "";
+
+    /// <summary>The frame round their profile picture (Walking/Progress/Explorer.EarnedFramesAsync): one they've earned, or "".</summary>
+    public string Frame { get; set; } = "";
 }
 
 /// <summary>An achievement a walker has unlocked (and whether its reward has been collected).</summary>

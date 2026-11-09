@@ -430,6 +430,20 @@ public static class Explorer
         }
     }
 
+    /// <summary>The frames this walker has earned for their profile picture, by the game's own rules.</summary>
+    public static async Task<List<string>> EarnedFramesAsync(AppDbContext db, WalkingProfile profile, CancellationToken cancel)
+    {
+        List<string> unlocked = await db.WalkingAchievements.AsNoTracking().Where(a => a.UserId == profile.UserId && a.Unlocked).Select(a => a.AchievementId).ToListAsync(cancel);
+        int bestMedals = await db.WalkingMedals.AsNoTracking().Where(m => m.UserId == profile.UserId).Select(m => (int?)m.Reached).MaxAsync(cancel) ?? 0;
+
+        return Rules.Frames.Where(f =>
+                (f.Cosmetic.Length > 0 && HasItem(profile.Cosmetics, f.Cosmetic)) ||
+                (f.Level > 0 && profile.PlayerLevel >= f.Level) ||
+                (f.Achievement.Length > 0 && unlocked.Contains(f.Achievement)) ||
+                (f.MedalRung >= 0 && bestMedals > f.MedalRung))
+            .Select(f => f.Id).ToList();
+    }
+
     public static int MedalReward(int rung) => Math.Min(Rules.MedalRewardMost, Rules.MedalRewardFirst + Rules.MedalRewardPerRung * rung);
 
     /// <summary>Bronze, Silver... Legend, then Legend II, Legend III... for ever.</summary>

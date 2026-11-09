@@ -17,14 +17,14 @@ public record WalkingMonsterDto(Guid Id, string SpeciesId, long Seed, int Rarity
 public record MonsterProgressDto(Guid Id, int Level, int Experience, int TrainedPower, int TrainedGuard, int TrainedTricks, int TrainedWits, int TrainingSteps, long BondSteps = 0);
 
 /// <summary>The choices that are yours: which monster is your companion, what it trains, and the title you wear (if you've earned it).</summary>
-public record ProgressRequest(Guid? CompanionId, List<MonsterProgressDto>? Monsters = null, string? Title = null, int? Focus = null);
+public record ProgressRequest(Guid? CompanionId, List<MonsterProgressDto>? Monsters = null, string? Title = null, int? Focus = null, string? Frame = null);
 
 /// <summary>
 /// THE WALKING GAME'S MONSTERS, made on the server.
 ///
 ///   GET  /api/walking/monsters            my monsters (a first-timer is given the starter companion here)
 ///   POST /api/walking/monsters/{id}/seen  I've watched its reveal - don't show it as new again
-///   PUT  /api/walking/monsters/progress   my companion, what it trains and the title I wear
+///   PUT  /api/walking/monsters/progress   my companion, what it trains, and the title and frame I wear
 ///
 /// New monsters are never asked for: they're found while walking, when a step report earns a lucky chance
 /// (see MonsterFinder and ReportSteps). The server stores what it rolled - species, rarity, seed, potential and a
@@ -123,6 +123,12 @@ public static class MonsterEndpoints
         {
             string title = Explorers.CleanTitle(request.Title);
             if (request.Title.Length == 0 || Explorer.HasItem(profile.Titles, title)) profile.Title = title;
+        }
+
+        // So does a frame (Explorer.EarnedFramesAsync).
+        if (request?.Frame != null && (request.Frame.Length == 0 || (await Explorer.EarnedFramesAsync(db, profile, cancel)).Contains(request.Frame)))
+        {
+            profile.Frame = request.Frame;
         }
 
         if (request?.CompanionId is Guid companion && mine.ContainsKey(companion))

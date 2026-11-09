@@ -459,6 +459,7 @@ public class AppDbContext : DbContext
         model.Entity<WalkingProfile>().Property(x => x.BoostMultiplier).HasDefaultValue(1f);
         model.Entity<WalkingProfile>().Property(x => x.LastGoalDay).HasMaxLength(10);
         model.Entity<WalkingProfile>().Property(x => x.RestDaysWeek).HasMaxLength(10);
+        model.Entity<WalkingProfile>().Property(x => x.Frame).HasMaxLength(32);
         model.Entity<WalkingMonster>().Property(x => x.TrainingDay).HasMaxLength(10);
 
         model.Entity<WalkingProfile>().Property(x => x.MonsterSlots).HasDefaultValue(6);
