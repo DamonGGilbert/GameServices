@@ -27,6 +27,12 @@ public record TicketClaimResponse(bool Granted, int SpinTickets);
 
 public record LuckyDrawResponse(string SetId, string SetName, int SpinTickets, List<string> Cards);
 
+public record CosmeticInfo(string Id, string Name, string Kind, int Price);
+
+public record CosmeticsResponse(int DuelPoints, List<string> Owned, List<CosmeticInfo> Items);
+
+public record BuyCosmeticResponse(string Id, int Spent, int DuelPoints, List<string> Owned);
+
 public record LedgerLine(string Kind, string Detail, int Amount, int BalanceAfter, DateTime CreatedUtc);
 
 /// <summary>
@@ -58,6 +64,8 @@ public static class EconomyEndpoints
         group.MapGet("/profile", GetProfile);
         group.MapGet("/packs", () => Results.Ok(Packs.All.Select(p => new PackInfo(p.Id, p.Name, p.Price, p.CardCount))));
         group.MapPost("/packs/{packId}/open", OpenPack);
+        group.MapGet("/cosmetics", GetCosmetics);
+        group.MapPost("/cosmetics/{id}/buy", BuyCosmetic);
         group.MapPost("/duels/reward", ClaimDuelReward);
         group.MapPost("/tickets/claim", ClaimTicket);
         group.MapPost("/lucky-draw", LuckyDraw);
@@ -190,6 +198,71 @@ public static class EconomyEndpoints
         }
 
         return Results.Ok(new OpenPackResponse(pack.Id, pack.Price, profile.DuelPoints, cards));
+    }
+
+    // ------------------------------------------------------------------ cosmetics
+
+    private static Task<List<string>> OwnedCosmetics(AppDbContext db, Guid userId, CancellationToken cancel)
+    {
+        return db.Ledger.AsNoTracking()
+            .Where(l => l.UserId == userId && l.Kind == Cosmetics.LedgerKind)
+            .Select(l => l.Detail)
+            .ToListAsync(cancel);
+    }
+
+    private static async Task<IResult> GetCosmetics(ClaimsPrincipal principal, AppDbContext db, CardCatalog catalog, CancellationToken cancel)
+    {
+        if (!TryGetUserId(principal, out Guid userId)) return Results.Unauthorized();
+
+        CardGameProfile profile = await GetOrCreateProfile(db, catalog, userId, cancel);
+
+        return Results.Ok(new CosmeticsResponse(
+            profile.DuelPoints,
+            await OwnedCosmetics(db, userId, cancel),
+            Cosmetics.All.Select(c => new CosmeticInfo(c.Id, c.Name, c.Kind, c.Price)).ToList()));
+    }
+
+    private static async Task<IResult> BuyCosmetic(string id, ClaimsPrincipal principal, AppDbContext db, CardCatalog catalog, CancellationToken cancel)
+    {
+        if (!TryGetUserId(principal, out Guid userId)) return Results.Unauthorized();
+
+        CosmeticDefinition? item = Cosmetics.Find(id);
+
+        if (item == null)
+        {
+            return Results.Problem("There is no such item.", statusCode: StatusCodes.Status404NotFound);
+        }
+
+        List<string> owned = await OwnedCosmetics(db, userId, cancel);
+
+        if (owned.Contains(item.Id))
+        {
+            return Results.Problem("You already own " + item.Name + ".", statusCode: StatusCodes.Status409Conflict);
+        }
+
+        CardGameProfile profile = await GetOrCreateProfile(db, catalog, userId, cancel);
+
+        if (profile.DuelPoints < item.Price)
+        {
+            return Results.Problem($"Not enough Duel Points: {item.Name} costs {item.Price} and you have {profile.DuelPoints}.", statusCode: StatusCodes.Status400BadRequest);
+        }
+
+        profile.DuelPoints -= item.Price;
+        profile.Version += 1;
+        db.Ledger.Add(new LedgerEntry { UserId = userId, Kind = Cosmetics.LedgerKind, Detail = item.Id, Amount = -item.Price, BalanceAfter = profile.DuelPoints });
+
+        try
+        {
+            await db.SaveChangesAsync(cancel);
+        }
+        catch (DbUpdateException)
+        {
+            // A double-tap: the wallet version changed under us, so only one purchase can win.
+            return Results.Problem("Your wallet changed while this was being processed. Please try again.", statusCode: StatusCodes.Status409Conflict);
+        }
+
+        owned.Add(item.Id);
+        return Results.Ok(new BuyCosmeticResponse(item.Id, item.Price, profile.DuelPoints, owned));
     }
 
     // ------------------------------------------------------------------ duel rewards
