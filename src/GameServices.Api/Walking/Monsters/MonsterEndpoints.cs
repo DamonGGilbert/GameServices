@@ -17,14 +17,15 @@ public record WalkingMonsterDto(Guid Id, string SpeciesId, long Seed, int Rarity
 public record MonsterProgressDto(Guid Id, int Level, int Experience, int TrainedPower, int TrainedGuard, int TrainedTricks, int TrainedWits, int TrainingSteps, long BondSteps = 0);
 
 /// <summary>The choices that are yours: which monster is your companion, what it trains, and the title you wear (if you've earned it).</summary>
-public record ProgressRequest(Guid? CompanionId, List<MonsterProgressDto>? Monsters = null, string? Title = null, int? Focus = null, string? Frame = null);
+public record ProgressRequest(Guid? CompanionId, List<MonsterProgressDto>? Monsters = null, string? Title = null, int? Focus = null, string? Frame = null,
+    int? Colour = null, int? Motto = null);
 
 /// <summary>
 /// THE WALKING GAME'S MONSTERS, made on the server.
 ///
 ///   GET  /api/walking/monsters            my monsters (a first-timer is given the starter companion here)
 ///   POST /api/walking/monsters/{id}/seen  I've watched its reveal - don't show it as new again
-///   PUT  /api/walking/monsters/progress   my companion, what it trains, and the title and frame I wear
+///   PUT  /api/walking/monsters/progress   my companion, what it trains, the title and frame I wear, my colour and motto
 ///
 /// New monsters are never asked for: they're found while walking, when a step report earns a lucky chance
 /// (see MonsterFinder and ReportSteps). The server stores what it rolled - species, rarity, seed, potential and a
@@ -130,6 +131,11 @@ public static class MonsterEndpoints
         {
             profile.Frame = request.Frame;
         }
+
+        // The colour of their profile card and the line under their name: any of the set ones (or none), never anything else.
+        MonsterCatalog.ProgressionEntry rules = MonsterCatalog.Shared.Progression;
+        if (request?.Colour is int colour && colour >= -1 && colour < rules.ProfileColours) profile.ProfileColour = colour;
+        if (request?.Motto is int motto && motto >= -1 && motto < rules.Mottos.Count) profile.Motto = motto;
 
         if (request?.CompanionId is Guid companion && mine.ContainsKey(companion))
         {

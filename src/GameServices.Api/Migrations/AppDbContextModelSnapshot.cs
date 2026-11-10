@@ -2304,6 +2304,11 @@ namespace GameServices.Api.Migrations
                     b.Property<int>("MonsterVisibility")
                         .HasColumnType("INTEGER");
 
+                    b.Property<int>("Motto")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(-1);
+
                     b.Property<int>("NameTags")
                         .HasColumnType("INTEGER");
 
@@ -2328,6 +2333,11 @@ namespace GameServices.Api.Migrations
 
                     b.Property<int>("PlayerXp")
                         .HasColumnType("INTEGER");
+
+                    b.Property<int>("ProfileColour")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(-1);
 
                     b.Property<bool>("ProgressStarted")
                         .HasColumnType("INTEGER");

@@ -147,7 +147,9 @@
       { "id": "frame_buddy", "cosmetic": "", "achievement": "better_together", "medalRung": -1, "level": 0 },
       { "id": "frame_champion", "cosmetic": "", "achievement": "veteran", "medalRung": -1, "level": 0 },
       { "id": "frame_legendary", "cosmetic": "", "achievement": "treasure_hunter", "medalRung": -1, "level": 0 }
-    ]
+    ],
+    "profileColours": 8,
+    "mottos": ["Always exploring!", "Every step counts.", "One more lap!", "Out in all weathers.", "Taking the long way round.", "Early bird walker.", "Night owl walker.", "Best friends with my Stepling.", "Collecting all six clans!", "Ready for a battle!", "Happy to swap Steplings.", "On the way to 10,000 steps.", "Off on an adventure.", "Walking with my friends.", "Looking for Legendaries.", "Learning the ropes."]
   },
   "discovery": {
     "steps": [300, 800, 1500, 3000, 4500, 6000, 10000], "monsterPercent": 12, "pityAfter": 15,

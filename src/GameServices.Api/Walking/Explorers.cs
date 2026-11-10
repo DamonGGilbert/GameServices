@@ -12,7 +12,7 @@ namespace GameServices.Api.Walking;
 /// <summary>One walker in the Players list: who they are, the title they wear, their companion (if they let people see
 /// their Steplings) and what they've been up to - all made by the server, never typed by anyone.</summary>
 public record ExplorerDto(Guid UserId, string Username, string Country, string Title, string Tier, int Points, bool IsFriend,
-    bool WalkingNow, string Activity, PublicMonsterDto? Companion, int CompanionPower, string Frame = "");
+    bool WalkingNow, string Activity, PublicMonsterDto? Companion, int CompanionPower, string Frame = "", int Colour = -1, string Motto = "");
 
 public record ExplorerListDto(string View, string Note, List<ExplorerDto> Explorers);
 
@@ -164,7 +164,8 @@ public static partial class Explorers
             seasons.TryGetValue(p.UserId, out RankedSeasonRecord? record);
             RankedTier tier = RankedPoints.TierFor(record?.Points ?? 0);
             result.Add(new ExplorerDto(p.UserId, names.GetValueOrDefault(p.UserId, "A walker"), p.Country ?? "", p.Title ?? "", tier.ToString(),
-                record?.Points ?? 0, friends.Contains(p.UserId), p.LastReportUtc > now - Now, activity, companion, power, p.Frame ?? ""));
+                record?.Points ?? 0, friends.Contains(p.UserId), p.LastReportUtc > now - Now, activity, companion, power, p.Frame ?? "",
+                p.ProfileColour, MonsterCatalog.Shared.Progression.MottoText(p.Motto)));
         }
 
         return result;

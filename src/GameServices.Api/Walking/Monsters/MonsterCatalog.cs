@@ -125,6 +125,15 @@ public sealed class MonsterCatalog
         public int MedalRewardMost { get; init; } = 500;
         public List<MedalEntry> Medals { get; init; } = new();
         public List<FrameEntry> Frames { get; init; } = new();
+
+        /// <summary>How many colours a profile card can be.</summary>
+        public int ProfileColours { get; init; } = 8;
+
+        /// <summary>The mottos a walker can pick, in order (a walker keeps the number). Picked, never typed.</summary>
+        public List<string> Mottos { get; init; } = new();
+
+        /// <summary>The words of a motto, or "" for none.</summary>
+        public string MottoText(int motto) => motto >= 0 && motto < Mottos.Count ? Mottos[motto] : "";
     }
 
     /// <summary>A frame for a profile picture, and what earns it (any one that's set).</summary>

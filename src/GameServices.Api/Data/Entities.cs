@@ -688,6 +688,12 @@ public class WalkingProfile : IVersioned
 
     /// <summary>The frame round their profile picture (Walking/Progress/Explorer.EarnedFramesAsync): one they've earned, or "".</summary>
     public string Frame { get; set; } = "";
+
+    /// <summary>The colour of their profile card (the game's ProfileStyle), -1 for none.</summary>
+    public int ProfileColour { get; set; } = -1;
+
+    /// <summary>The line under their name: a number in the fixed list of mottos (MonsterCatalog), -1 for none. Never typed.</summary>
+    public int Motto { get; set; } = -1;
 }
 
 /// <summary>An achievement a walker has unlocked (and whether its reward has been collected).</summary>

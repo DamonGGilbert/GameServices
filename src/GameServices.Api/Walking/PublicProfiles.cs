@@ -16,7 +16,7 @@ public record PublicMonsterDto(Guid Id, string SpeciesId, long Seed, int RarityT
 
 public record PublicProfileDto(Guid UserId, string Username, string Country, bool IsMe, bool IsFriend,
     string Tier, int Points, int Wins, int Losses, int HighValueWins, int WorldPlace,
-    string MonsterVisibility, bool MonstersHidden, int MonsterCount, List<PublicMonsterDto> Monsters, string Frame = "");
+    string MonsterVisibility, bool MonstersHidden, int MonsterCount, List<PublicMonsterDto> Monsters, string Frame = "", int Colour = -1, string Motto = "");
 
 public record PlayerSearchDto(Guid UserId, string Username, string Country);
 
@@ -123,7 +123,8 @@ public static class PublicProfiles
 
         return Results.Ok(new PublicProfileDto(user.Id, user.Username, profile.Country ?? "", isMe, isFriend,
             tier.ToString(), record.Points, record.Wins, record.Losses, record.HighValueWins, place,
-            ((MonsterVisibility)profile.MonsterVisibility).ToString(), !canSee, count, monsters, profile.Frame ?? ""));
+            ((MonsterVisibility)profile.MonsterVisibility).ToString(), !canSee, count, monsters, profile.Frame ?? "",
+            profile.ProfileColour, MonsterCatalog.Shared.Progression.MottoText(profile.Motto)));
     }
 
     private static async Task<IResult> GetPrivacy(ClaimsPrincipal principal, AppDbContext db, CancellationToken cancel)
