@@ -49,6 +49,22 @@ public static class Cosmetics
         new CosmeticDefinition("CoralSleeve_0", "Coral", "sleeve", 800),
         new CosmeticDefinition("SpiralSleeve_0", "Spiral", "sleeve", 1200),
         new CosmeticDefinition("PrismWaveSleeve_0", "Prism Wave", "sleeve", 2000),
+        new CosmeticDefinition("SpaceStation_0", "Space Station", "playmat", 1400),
+        new CosmeticDefinition("BambooGrove_0", "Bamboo Grove", "playmat", 800),
+        new CosmeticDefinition("Candyland_0", "Candyland", "playmat", 900),
+        new CosmeticDefinition("SnowyNight_0", "Snowy Night", "playmat", 1200),
+        new CosmeticDefinition("PixelArcade_0", "Pixel Arcade", "playmat", 1500),
+        new CosmeticDefinition("BloodMoon_0", "Blood Moon", "playmat", 1700),
+        new CosmeticDefinition("GoldenPyramids_0", "Golden Pyramids", "playmat", 2000),
+        new CosmeticDefinition("HoloGrid_0", "Holo Grid", "playmat", 2800),
+        new CosmeticDefinition("SpaceSleeve_0", "Space Station", "sleeve", 1000),
+        new CosmeticDefinition("BambooSleeve_0", "Bamboo", "sleeve", 500),
+        new CosmeticDefinition("CandySleeve_0", "Candy", "sleeve", 600),
+        new CosmeticDefinition("SnowySleeve_0", "Snowy Night", "sleeve", 800),
+        new CosmeticDefinition("PixelSleeve_0", "Pixel", "sleeve", 900),
+        new CosmeticDefinition("BloodMoonSleeve_0", "Blood Moon", "sleeve", 1200),
+        new CosmeticDefinition("PyramidSleeve_0", "Pyramid", "sleeve", 1400),
+        new CosmeticDefinition("HoloGridSleeve_0", "Holo Grid", "sleeve", 2200),
     };
 
     public static CosmeticDefinition? Find(string? id) => All.FirstOrDefault(c => c.Id == id);
